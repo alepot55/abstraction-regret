@@ -43,14 +43,17 @@ loads + per-transition `visited` test-and-set dedup. So word-scanning was never 
 
 ## Nsight characterization (`paper/data/nsight_rtx4070.csv`)
 `worklist_warp` is **latency/instruction-bound, not memory-bound**: DRAM ≤2.25%, L2 hit ≥97.6%
-even for brill's 17 MB CSR (≫ 6 MB L2), because all strings share the CSR and only a hot row
+even for brill's 17 MB CSR, because all strings share the CSR and only a hot row
 subset is touched per batch (stays L2-resident).
 
 ## Claim verifications (skeptical re-checks, 2026-06-26)
 - **Warp beats hand-CUDA (NFA) on the median, with a wide tail.** warp/cuda multistream =
   1.11–1.13× (regret 0.89–0.90×) on the single-seed sweep. The 5-seed run
   (`paper/data/regret_multiseed_rtx4070.csv`) gives a *median* regret of 0.85 with min 0.78
-  and **max 3.34** at n=32 — one seed where Warp is 3.3× slower than CUDA. Quote the median
+  and **max 3.34** at n=32. That maximum is not evidence about Warp: four of the fifteen
+  (size, seed) points used an automaton accepting before any byte was read, where the
+  measured "throughput" is launch overhead. The driver now skips those and the file needs
+  re-running (`docs/THREATS.md`). Quote the median
   and the spread together; the earlier "spread ±1% across 3 seeds" here was refuted by the
   5-seed file that superseded it. (The cost-model fit gives 0.63×, but Warp has only two
   points so that fit is exact by construction — `docs/RESULTS_COSTMODEL.md` — and it is not

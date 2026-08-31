@@ -29,6 +29,7 @@ from pathlib import Path
 
 from gpufsm.api import run_batch
 from gpufsm.bench.csvio import environment, guard_device, write_rows
+from gpufsm.bench.oracle import require
 from gpufsm.core.dfa import random_dfa
 from gpufsm.reference import simulate_dfa
 
@@ -101,12 +102,9 @@ def main() -> int:
             rate, seen = _oracle_profile(dfa, batch)
             speeds = {}
             for backend in BACKENDS:
-                # Gate on the oracle before believing any number from this kernel.
-                got = run_batch(dfa, batch[:32], backend=backend)
-                ref = [simulate_dfa(dfa, b) for b in batch[:32]]
-                if [(r.accepted, r.match_len) for r in got] != ref:
-                    print(f"  ORACLE MISMATCH on {backend} at n={n} — aborting")
-                    return 1
+                # The shared gate, not a hand-rolled comparison: one implementation of
+                # "agrees with the reference" is the point of gpufsm.bench.oracle.
+                require(dfa, batch, backend=backend)
                 speeds[backend] = _gbps(dfa, batch, total_bytes, backend)
             table_mb = n / 1024.0
             print(

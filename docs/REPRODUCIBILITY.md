@@ -41,7 +41,7 @@ pytest -m "not gpu" -q    # the CPU suite: oracle semantics, bit-packed spec, ge
 pytest -m gpu -q          # GPU backends against the oracle (needs a GPU) — see the warning
 python scripts/oracle_gate.py --require cuda,triton,warp
                           # every registered triple; a missing backend is a failure, not a skip
-gpufsm verify             # quick: the default technique per backend, NFA examples only
+gpufsm verify             # quick: every registered NFA technique, on the examples only
 ```
 
 `gpufsm.reference` is the single oracle (latch-first-match). The bit-packed CPU simulator
@@ -50,8 +50,8 @@ gpufsm verify             # quick: the default technique per backend, NFA exampl
 > **A green `pytest -m gpu` can mean nothing ran.** Every gpu-marked test is wrapped in a
 > `skipif` on backend availability, and a skip counts as a pass, so on a box where the CUDA
 > extension failed to build the suite exits 0 having verified nothing. It also does not reach
-> every registered `(Kind, Backend, technique)` triple: the Warp backend has no pytest
-> coverage, and neither does the Triton DFA path. `scripts/oracle_gate.py` walks the registry
+> every registered `(Kind, Backend, technique)` triple, though it now covers the Warp backend
+> and every backend that registers a DFA technique. `scripts/oracle_gate.py` walks the registry
 > instead, treats an expected-but-absent backend as a failure, and refuses to exit 0 when it
 > checked zero triples. Run `gpufsm env` first either way.
 
@@ -74,7 +74,7 @@ compares two raw Triton kernels that are not automata at all.
 | The cost model is predictive, not overfit | `python scripts/validate_costmodel.py` | holdout + leave-one-out, printed |
 | Every figure | `python paper/figures.py` | `paper/figures/fig_*.{pdf,png}` |
 | Abstraction regret: Triton 6-8x, Warp 0.85x median (0.78-3.34 over 5 seeds) vs CUDA | sweep + multiseed | `fig_abstraction_regret` |
-| The regret is not a single-seed artifact | `python scripts/regret_multiseed.py` | `paper/data/regret_multiseed_rtx4070.csv` |
+| The regret is not a single-seed artifact | `python scripts/regret_multiseed.py` | `paper/data/regret_multiseed_rtx4070.csv` — **driver since fixed, file needs re-running** |
 | DFA memory-bound L2 knee (CUDA peaks then drops; Triton flat) | `python scripts/sweep_dfa.py` | `paper/data/dfa_regret_rtx4070.csv`, `fig_dfa_memory_bound` |
 | Causal: the scalar-control cliff inside Triton | `python scripts/ablate_scalar_control.py` | `paper/data/scalar_ablation_rtx4070.csv` |
 | Block-parallel warp worklist vs one thread per string | `python scripts/bench_worklist_warp.py` | `paper/data/worklist_warp{,_batch}_rtx4070.csv` |

@@ -156,14 +156,27 @@ class TestLoaderRefusesMalformedFiles:
 
 
 class TestSymbolSetTokenizer:
-    @pytest.mark.parametrize("text", ["[0x4]", "[0xZZ]", "[]", "[^]"])
+    @pytest.mark.parametrize("text", ["[0x4]", "[0xZZ]", "[]"])
     def test_malformed_symbol_sets_raise(self, text: str) -> None:
         with pytest.raises(ValueError):
             parse_symbol_set(text)
 
+    def test_negated_empty_class_is_every_byte_not_an_error(self) -> None:
+        """`[^]` is the negated empty class: maximally reachable, not unreachable.
+
+        The emptiness guard has to run before the caret is stripped, or it rejects this
+        with a message that is the opposite of the truth.
+        """
+        assert parse_symbol_set("[^]") == set(range(256))
+
     @pytest.mark.parametrize(
         ("text", "expected"),
-        [("[0x41]", {0x41}), ("[\\x41]", {0x41}), ("[0x41-0x43]", {0x41, 0x42, 0x43})],
+        [
+            ("[0x41]", {0x41}),
+            ("[\\x41]", {0x41}),
+            ("[0X41]", {0x41}),
+            ("[0x41-0x43]", {0x41, 0x42, 0x43}),
+        ],
     )
     def test_both_hex_prefixes_still_parse(self, text: str, expected: set[int]) -> None:
         assert parse_symbol_set(text) == expected

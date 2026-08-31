@@ -9,7 +9,14 @@ import sys
 from .api import benchmark, run
 from .backends import IMPORT_ERRORS
 from .bench import sweep, write_csv
-from .core.registry import Backend, Kind, available_backends, list_kinds, list_techniques
+from .core.registry import (
+    Backend,
+    Kind,
+    available_backends,
+    list_kinds,
+    list_techniques,
+    unavailable_reason,
+)
 from .examples import EXAMPLES
 
 
@@ -38,7 +45,7 @@ def _cmd_env(_: argparse.Namespace) -> int:
     if missing:
         print(f"missing  : {', '.join(b.value for b in missing)}")
         for b in missing:
-            why = IMPORT_ERRORS.get(b.value)
+            why = IMPORT_ERRORS.get(b.value) or unavailable_reason(b)
             print(f"  {b.value:7s} {why}" if why else f"  {b.value:7s} not installed")
     return 0
 

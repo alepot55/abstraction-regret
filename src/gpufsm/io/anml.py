@@ -35,7 +35,7 @@ from ..core.nfa import ANY_SYMBOL, NFA, NFABuilder
 _ALL_BYTES = range(256)
 
 
-_HEX_ATOM = re.compile(r"(?:0x|\\x)[0-9a-fA-F]{2}")
+_HEX_ATOM = re.compile(r"(?:0x|\\x)[0-9a-fA-F]{2}", re.IGNORECASE)
 """Exactly two hex digits after the prefix; anything shorter is a malformed atom."""
 
 
@@ -60,11 +60,13 @@ def parse_symbol_set(s: str) -> set[int]:
     if not (s.startswith("[") and s.endswith("]")):
         return {_parse_atom(s)}
     body = s[1:-1]
-    negate = body.startswith("^")
-    if negate:
-        body = body[1:]
     if not body:
         raise ValueError(f"empty ANML symbol-set {s!r}: the STE would be unreachable")
+    negate = body.startswith("^")
+    if negate:
+        # `[^]` is the *negated* empty class, i.e. every byte -- maximally reachable, not
+        # unreachable. The emptiness check above therefore runs before the caret is stripped.
+        body = body[1:]
 
     # Tokenize into atoms: 0xHH | \xHH | single char. A hex prefix must be followed by
     # exactly two hex digits -- taking four characters blindly turned a truncated atom at

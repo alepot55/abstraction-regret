@@ -10,6 +10,8 @@ from __future__ import annotations
 import importlib
 from typing import Any
 
+from ...core.registry import Backend, set_unavailable_reason
+
 _MODULE = "gpufsm.backends.cuda._cuda"
 
 _cached: Any | None = None
@@ -24,9 +26,14 @@ def load() -> Any:
 
 
 def available() -> bool:
-    """True when the extension imports — i.e. it was built and its deps resolve."""
+    """True when the extension imports — i.e. it was built and its deps resolve.
+
+    On failure the reason is recorded so ``gpufsm env`` can distinguish "never built" from
+    "built against another Python and will not load".
+    """
     try:
         load()
         return True
-    except Exception:
+    except Exception as exc:
+        set_unavailable_reason(Backend.CUDA, f"{type(exc).__name__}: {exc}")
         return False

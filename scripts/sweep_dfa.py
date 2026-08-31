@@ -22,8 +22,8 @@ from pathlib import Path
 
 from gpufsm.api import run_batch
 from gpufsm.bench.csvio import environment, guard_device, write_rows
+from gpufsm.bench.oracle import OracleMismatch, require
 from gpufsm.core.dfa import random_dfa
-from gpufsm.reference import simulate_dfa
 
 # 1 KB of transition table per state (256 x int32), so num_states is also the table size
 # in KB. The grid spans 1 MB to 100 MB so that it straddles the L2 capacity of any current
@@ -45,13 +45,18 @@ def _throughput_gbps(total_bytes: int, kernel_ms: float) -> float:
 
 
 def _validate(dfa, rng: random.Random) -> bool:
-    """Cheap oracle check on a small batch (separate from the timing batch)."""
+    """Oracle check on a small batch, separate from the timing batch.
+
+    Uses the shared gate rather than a local comparison: one implementation of "agrees with
+    the reference" is what keeps the failure message and the sample size identical across
+    every driver.
+    """
     batch = [bytes(rng.randint(0, 255) for _ in range(rng.randint(0, 48))) for _ in range(32)]
-    refs = [simulate_dfa(dfa, b) for b in batch]
     for be in BACKENDS:
-        got = [(r.accepted, r.match_len) for r in run_batch(dfa, batch, backend=be)]
-        if got != refs:
-            print(f"  VALIDATION FAIL backend={be}: GPU != oracle")
+        try:
+            require(dfa, batch, backend=be)
+        except OracleMismatch as exc:
+            print(f"  VALIDATION FAIL backend={be}: {exc}")
             return False
     return True
 

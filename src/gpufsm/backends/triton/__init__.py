@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import importlib
 
-from ...core.registry import Backend, register_availability
+from ...core.registry import Backend, register_availability, set_unavailable_reason
 
 _TECHNIQUE_MODULES = (
     "gpufsm.backends.triton.dense",
@@ -37,7 +37,8 @@ def triton_available() -> bool:
         import triton  # noqa: F401
 
         return bool(torch.cuda.is_available())
-    except Exception:
+    except Exception as exc:
+        set_unavailable_reason(Backend.TRITON, f"{type(exc).__name__}: {exc}")
         return False
 
 

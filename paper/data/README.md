@@ -18,7 +18,7 @@ Two conventions hold across all of them:
 |---|---|---|---|
 | `sweep_techniques.csv` | `scripts/sweep_techniques.py` | RTX 4070 | the throughput table; `fig_throughput_vs_states`, `fig_worklist_speedup`, `fig_memory_ablation`, `fig_abstraction_regret` |
 | `costmodel_rtx4070.csv` | `scripts/calibrate_costmodel.py` | RTX 4070 | the two-parameter cost model; `fig_costmodel_fit`. `scripts/validate_costmodel.py` re-reads it for the holdout test |
-| `dfa_regret_rtx4070.csv` | `scripts/sweep_dfa.py` | RTX 4070 | the DFA L2 knee; `fig_dfa_memory_bound` |
+| `dfa_regret_rtx4070.csv` | `scripts/sweep_dfa.py` | RTX 4070 | the DFA table-size curve; `fig_dfa_memory_bound`. Its `note` column was recomputed against the card's real 36 MB L2 — a derived label, no measured value touched |
 | `scalar_ablation_rtx4070.csv` | `scripts/ablate_scalar_control.py` | RTX 4070 | the causal tile-vs-scalar cliff inside Triton. **Upper bound** — see below |
 | `regret_multiseed_rtx4070.csv` | `scripts/regret_multiseed.py` | RTX 4070 | that the headline regret is not a single-seed artifact. **Predates a driver fix** — see below |
 | `worklist_warp_rtx4070.csv` | `scripts/bench_worklist_warp.py` | RTX 4070 | warp-per-string vs thread-per-string on real automata |
@@ -48,8 +48,9 @@ numbers.
 
 - `regret_multiseed_rtx4070.csv` was measured with an input batch of 2048 copies of one
   periodic string, which makes branch divergence zero — in the measurement whose purpose is
-  to show the headline is robust. The driver now uses the shared `random_batch` and the
-  pinned generator, so re-running will not reproduce these values.
+  to show the headline is robust — and four of its fifteen points used an automaton that
+  accepts before any byte is read, where the number is launch overhead rather than
+  throughput. Both are fixed in the driver, so re-running will not reproduce these values.
 - `scalar_ablation_rtx4070.csv` compares two kernels that differ in arithmetic as well as in
   control pattern, so its 16x cliff is an upper bound on the scalar-control cost.
 

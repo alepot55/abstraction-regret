@@ -86,8 +86,27 @@ def register(
     return deco
 
 
+_UNAVAILABLE: dict[Backend, str] = {}
+
+
 def register_availability(backend: Backend, probe: Callable[[], bool]) -> None:
     _AVAILABILITY[backend] = probe
+
+
+def set_unavailable_reason(backend: Backend, reason: str) -> None:
+    """Record why a backend's availability probe said no.
+
+    "Not installed" and "installed, built, and refuses to load" are the same answer from
+    :func:`is_available` and very different answers for the person reading ``gpufsm env``.
+    A CUDA extension compiled against another Python is the case that motivated this: the
+    probe caught the ImportError, returned False, and the backend simply vanished.
+    """
+    _UNAVAILABLE[backend] = reason
+
+
+def unavailable_reason(backend: Backend) -> str | None:
+    """Why ``backend``'s probe last said no, if it said why."""
+    return _UNAVAILABLE.get(backend)
 
 
 def is_available(backend: Backend) -> bool:

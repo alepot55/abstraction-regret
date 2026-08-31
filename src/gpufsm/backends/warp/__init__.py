@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import importlib
 
-from ...core.registry import Backend, register_availability
+from ...core.registry import Backend, register_availability, set_unavailable_reason
 
 _TECHNIQUE_MODULES = (
     "gpufsm.backends.warp.nfa",
@@ -28,7 +28,8 @@ def warp_available() -> bool:
         import warp as wp
 
         return bool(wp.get_cuda_device_count() > 0)
-    except Exception:
+    except Exception as exc:
+        set_unavailable_reason(Backend.WARP, f"{type(exc).__name__}: {exc}")
         return False
 
 

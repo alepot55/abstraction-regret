@@ -25,6 +25,8 @@ from gpufsm import run_batch
 from gpufsm.bench import DENSE, random_batch, random_nfa
 from gpufsm.bench.csvio import environment, guard_device, write_rows
 from gpufsm.bench.oracle import require
+from gpufsm.core.nfa import NFA
+from gpufsm.reference import simulate
 
 SIZES = [32, 48, 64]
 SEEDS = range(5)
@@ -43,13 +45,21 @@ FIELDS = [
 ]
 
 
-def _mk(n: int, seed: int):
-    """The canonical DENSE family -- the same generator every committed CSV was measured on.
+def _mk(n: int, seed: int) -> NFA | None:
+    """The canonical DENSE family, or None when the draw is degenerate.
 
-    This file used to carry its own transcription of it, which is exactly the drift
-    ``gpufsm.bench.generators`` exists to prevent.
+    ``None`` means the automaton's start closure already accepts, so every kernel returns at
+    position 0 without reading a byte and the "throughput" is launch overhead divided by a
+    batch size. Four of the fifteen (size, seed) points in the committed CSV are like that,
+    which is where its 3.34x maximum comes from -- a number that says nothing about Warp.
+    A throughput measurement has to consume input to mean anything.
+
+    The generator itself is the shared one; this file used to carry its own transcription,
+    which is exactly the drift ``gpufsm.bench.generators`` exists to prevent.
     """
-    return random_nfa(n, seed, DENSE)
+    nfa = random_nfa(n, seed, DENSE)
+    accepted, match_len = simulate(nfa, b"")
+    return None if (accepted and match_len == 0) else nfa
 
 
 def main() -> int:

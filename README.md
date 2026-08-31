@@ -23,8 +23,8 @@ cost tracks the **column**, not the row.
 | **high-level** | NVIDIA Warp — 0.8-0.9x | Triton — 6-8x |
 
 Warp's range is measured throughput, not a model fit: 0.90x on the single-seed sweep and 0.85x
-median over five random-NFA seeds. The spread runs 0.78 to 3.34, so on one seed Warp is 3.3x
-*slower* than CUDA. Quote the median with its spread, not the best point.
+median over five random-NFA seeds. **The committed file needs re-running.** Its driver timed a zero-divergence input batch and included four (size, seed) points whose automaton accepts before reading a byte -- where the 3.34x maximum comes from. Both are fixed; see `docs/THREATS.md`. Read the 0.8-0.9x as the range the two
+independent measurements agree on, and the tail as not yet established.
 
 Two workloads pin down two faces of the same cause. NFA simulation is control-flow-bound; DFA
 simulation is memory-bound. Triton pays on **both**, which is what rules out "it is the
@@ -80,7 +80,8 @@ Four invariants carry the study. Each is one place in the code, on purpose.
 - **One API** — `gpufsm.api`: `run`, `run_batch`, `benchmark`. NFAs and DFAs both go through it;
   the automaton's type selects the kind, so there is no second entry point to keep in sync.
 - **One extension point** — `gpufsm.core.registry`: a backend or a technique is one module plus
-  one `@register(Kind, Backend, "name")` line. Nothing dispatches on a hand-parsed string.
+  one `@register(Kind, Backend, "name")` line, with `default=True` on the one technique the
+  backend uses when the caller names none. Nothing dispatches on a hand-parsed string.
 - **One oracle** — `gpufsm.reference`: a CPU simulator with latch-first-match semantics. Every
   backend reproduces its `(accepted, match_len)` bit-for-bit, and every driver that reports an
   automaton throughput calls `gpufsm.bench.oracle.require` before timing anything.

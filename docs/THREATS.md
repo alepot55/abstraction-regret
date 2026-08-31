@@ -92,13 +92,16 @@ Both files below are still the committed evidence, and both were produced by a v
 their driver that has since been corrected. The drivers in the repository are the fixed ones,
 so re-running them will not reproduce these numbers exactly.
 
-**`regret_multiseed_rtx4070.csv`.** The driver timed 2048 copies of a single periodic
-`"abcdeabcde..."` string, so every lane walked an identical trajectory and branch divergence —
-the mechanism the whole result is about — was zero by construction. It also carried its own
-transcription of the NFA generator instead of using the pinned one. It now uses
-`gpufsm.bench.random_batch` and `random_nfa(n, seed, DENSE)` like every other driver. Whether
-the median regret survives a divergent input is exactly the question the file was meant to
-answer, and it has not been asked yet.
+**`regret_multiseed_rtx4070.csv`.** Two defects, both fixed in the driver, neither yet
+re-measured. It timed 2048 copies of a single periodic `"abcdeabcde..."` string, so every lane
+walked an identical trajectory and branch divergence — the mechanism the whole result is
+about — was zero by construction; it now uses `gpufsm.bench.random_batch`. And **four of its
+fifteen (size, seed) points draw an automaton whose start closure already accepts**, so every
+kernel returns at position 0 and the "throughput" is launch overhead divided by a batch size.
+That population is where the file's 3.34x maximum comes from, which is why the paper reports
+the median alone; the driver now skips such draws. Whether the median survives a divergent
+input on non-degenerate automata is exactly the question this file was meant to answer, and it
+has not been asked yet.
 
 **`scalar_ablation_rtx4070.csv`.** The tile and scalar kernels differ in arithmetic as well as
 in access and control pattern: the scalar one runs 256 serially dependent
