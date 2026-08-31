@@ -70,7 +70,7 @@ python scripts/gluon_probe.py            # 0 confirmed, 1 falsified, 2 inconclus
 | `figures.py` | six figures rewritten; `git diff` shows only re-render noise |
 | technique sweep | Triton 6-8x slower than CUDA at equal algorithm; Warp near parity |
 | DFA sweep | CUDA and Warp rise then fall with table size; Triton flat at 29-32 Gbps |
-| cost model | per-backend fit ~15% relative error; predictive for CUDA, not for Triton |
+| cost model | per-backend fit: <1% error at n=256, 20-60% at n=32/64 (launch overhead); predictive for CUDA, not for Triton |
 | `gluon_probe.py` | exit 0 with "confirmed - no scalar element load" |
 
 ## Evaluating this artifact honestly

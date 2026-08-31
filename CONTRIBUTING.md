@@ -45,7 +45,7 @@ class MyExecutor:
     def run(self, input_bytes: bytes) -> Result: ...
     # optional: run_batch(list[bytes]) -> list[Result] for a single-launch batch
 
-@register(Kind.NFA, Backend.MYDSL, "worklist")
+@register(Kind.NFA, Backend.MYDSL, "worklist", default=True)
 def _make(automaton: Automaton, technique: str) -> MyExecutor:
     assert isinstance(automaton, NFA)
     return MyExecutor(automaton, technique)

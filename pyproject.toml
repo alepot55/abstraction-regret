@@ -32,7 +32,7 @@ dev = ["pytest>=7.4", "ruff>=0.5", "mypy>=1.8"]
 gpufsm = "gpufsm.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/alepot55/gpufsm"
+Homepage = "https://github.com/alepot55/abstraction-regret"
 
 [tool.scikit-build]
 # Build the CUDA extension only when explicitly requested (GPUFSM_BUILD_CUDA=1).

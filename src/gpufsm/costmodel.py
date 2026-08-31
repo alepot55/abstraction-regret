@@ -178,41 +178,31 @@ class Measurement:
     throughput_gbps: float
 
 
-def calibrate(measurements: list[Measurement]) -> CostModel:
-    """Fit (eff_bandwidth, compute_s_per_state2) by least squares.
+def fit(traffic: list[float], n_squared: list[float], seconds_per_symbol: list[float]) -> CostModel:
+    """Least-squares fit of ``time = a*traffic + b*n^2`` over raw columns.
 
-    Each measurement gives ``time_per_symbol = 8e-9/throughput_gbps`` (seconds) and a
-    linear equation ``time = a*traffic + b*num_states**2`` with ``a = 1/bandwidth`` and
-    ``b = compute_s_per_state2``. Requires >= 2 points spanning techniques.
+    The single implementation of the model's fit. There used to be three -- here, in
+    ``scripts/validate_costmodel.py`` and inline in ``paper/figures.py`` -- and they had
+    already drifted: the figure generator carried a unit error that put every predicted
+    point nine decades off its own y = x line, and kept a clamp this function no longer uses.
 
-    A negative fitted ``a`` means the data carry no memory term at all -- the kernel is
-    compute-bound, and the unconstrained solve is describing noise. Rather than clamp ``a``
-    to a tiny positive number (which reported an effective bandwidth of 10^9 GB/s, six orders
-    above any real device, while leaving ``b`` fitted against a memory term that had just been
-    removed), refit ``b`` alone on the ``n^2`` column and represent the compute-bound case
-    honestly as an infinite bandwidth. The returned pair is then the solution of a
-    well-posed problem in both branches, which is what ``relative_error`` assumes.
+    A negative fitted ``a`` means the data carry no memory term at all: the kernel is
+    compute-bound and the unconstrained solve is describing noise. Clamping ``a`` to a tiny
+    positive number reported an effective bandwidth of 10^9 GB/s, six orders above any real
+    device, while leaving ``b`` fitted against a memory term the clamp had just removed. So
+    the compute-bound branch refits ``b`` alone and says ``inf`` for the bandwidth, which
+    makes the pair the solution of a well-posed problem either way -- what
+    :func:`relative_error` assumes when it uses them together.
     """
     import numpy as np
 
-    if len(measurements) < 2:
-        raise ValueError("calibration needs >= 2 measurements")
-    rows = []
-    rhs = []
-    for m in measurements:
-        if m.throughput_gbps <= 0:
-            continue
-        traffic = traffic_per_symbol(m.nfa, m.backend, m.technique)
-        rows.append([float(traffic), float(m.nfa.num_states**2)])
-        rhs.append(8e-9 / m.throughput_gbps)  # seconds per symbol
-    if len(rows) < 2:
-        raise ValueError("need >= 2 valid (positive-throughput) measurements")
-    a_mat = np.asarray(rows, dtype=float)
-    b_vec = np.asarray(rhs, dtype=float)
+    if len(traffic) < 2:
+        raise ValueError("calibration needs >= 2 points")
+    a_mat = np.stack([np.asarray(traffic, dtype=float), np.asarray(n_squared, dtype=float)], axis=1)
+    b_vec = np.asarray(seconds_per_symbol, dtype=float)
     coef, *_ = np.linalg.lstsq(a_mat, b_vec, rcond=None)
     a = float(coef[0])  # 1/bandwidth (s/byte)
     if a <= 0.0:
-        # Compute-bound: refit the compute term alone so (a, b) stay mutually consistent.
         coef_b, *_ = np.linalg.lstsq(a_mat[:, 1:2], b_vec, rcond=None)
         return CostModel(
             eff_bandwidth_bytes_per_s=math.inf,
@@ -222,6 +212,24 @@ def calibrate(measurements: list[Measurement]) -> CostModel:
         eff_bandwidth_bytes_per_s=1.0 / a,
         compute_s_per_state2=max(float(coef[1]), 0.0),
     )
+
+
+def calibrate(measurements: list[Measurement]) -> CostModel:
+    """Fit the model from measured throughputs. See :func:`fit`.
+
+    Each measurement gives ``time_per_symbol = 8e-9/throughput_gbps`` seconds and a row
+    ``(traffic, num_states^2)``. Requires >= 2 points spanning techniques.
+    """
+    traffic, n_squared, times = [], [], []
+    for m in measurements:
+        if m.throughput_gbps <= 0:
+            continue
+        traffic.append(float(traffic_per_symbol(m.nfa, m.backend, m.technique)))
+        n_squared.append(float(m.nfa.num_states**2))
+        times.append(8e-9 / m.throughput_gbps)  # seconds per symbol
+    if len(traffic) < 2:
+        raise ValueError("need >= 2 valid (positive-throughput) measurements")
+    return fit(traffic, n_squared, times)
 
 
 def relative_error(model: CostModel, m: Measurement) -> float:

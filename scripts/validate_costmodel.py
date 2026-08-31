@@ -21,17 +21,21 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
+
+from gpufsm.costmodel import fit
 
 DATA = Path("paper/data/costmodel_rtx4070.csv")
 
 
 def _fit(sub: pd.DataFrame) -> tuple[float, float]:
-    a_mat = np.c_[sub.traffic_bytes_per_sym.to_numpy(float), sub.num_states.to_numpy(float) ** 2]
-    rhs = 8e-9 / sub.throughput_gbps.to_numpy(float)  # seconds per symbol
-    coef, *_ = np.linalg.lstsq(a_mat, rhs, rcond=None)
-    return max(float(coef[0]), 1e-18), max(float(coef[1]), 0.0)
+    """(1/bandwidth, compute) via the library's single fit -- not a third copy of it."""
+    model = fit(
+        list(sub.traffic_bytes_per_sym.to_numpy(float)),
+        list(sub.num_states.to_numpy(float) ** 2),
+        list(8e-9 / sub.throughput_gbps.to_numpy(float)),
+    )
+    return 1.0 / model.eff_bandwidth_bytes_per_s, model.compute_s_per_state2
 
 
 def _pred_gbps(a: float, b: float, traffic: float, n: float) -> float:

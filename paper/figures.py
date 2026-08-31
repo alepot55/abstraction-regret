@@ -147,20 +147,19 @@ def fig_abstraction_regret(df: pd.DataFrame) -> None:
 
 def fig_costmodel_fit(cm: pd.DataFrame) -> None:
     """Predicted vs measured throughput: per-backend fit of time = a*traffic + b*n^2."""
-    import numpy as np
+    from gpufsm.costmodel import fit
 
     fig, ax = plt.subplots()
     for be, g in cm.groupby("backend"):
         traffic = g["traffic_bytes_per_sym"].to_numpy(float)
         n2 = (g["num_states"].to_numpy(float)) ** 2
         meas = g["throughput_gbps"].to_numpy(float)
-        t_meas = 8e-9 / meas  # seconds/symbol
-        coef, *_ = np.linalg.lstsq(np.stack([traffic, n2], axis=1), t_meas, rcond=None)
-        a, b = max(coef[0], 1e-18), max(coef[1], 0.0)
-        # Gbps from seconds-per-symbol is 8 bits / (t * 1e9) == 8e-9 / t. A second /1e9 here
-        # put every predicted point nine decades under the y=x line it is plotted against.
-        # gpufsm.costmodel.predict_throughput_gbps is the reference form of this conversion.
-        pred = 8e-9 / (a * traffic + b * n2)
+        # One implementation of the fit, in the library. This file used to carry its own,
+        # with a unit error that put every predicted point nine decades under the y = x line
+        # it is drawn against, and a clamp that reported an unphysical bandwidth.
+        model = fit(list(traffic), list(n2), list(8e-9 / meas))
+        a = 1.0 / model.eff_bandwidth_bytes_per_s
+        pred = 8e-9 / (a * traffic + model.compute_s_per_state2 * n2)
         ax.scatter(meas, pred, label=be, s=40)
     lim = [cm["throughput_gbps"].min() * 0.5, cm["throughput_gbps"].max() * 2]
     ax.plot(lim, lim, "k--", lw=0.8, label="y = x")
