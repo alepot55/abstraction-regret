@@ -54,9 +54,17 @@ _LABEL = {
 
 
 def _save(fig, name: str) -> None:
+    """Write both formats, byte-reproducibly.
+
+    matplotlib stamps a ``/CreationDate`` into every PDF, so re-running this script
+    produced a diff in twelve files that differed only in a timestamp -- which makes
+    "the figures rebuild from the committed CSVs" impossible to check with `git diff`.
+    Omitting the date makes a rebuild a no-op when the data has not changed, and a real
+    diff when it has.
+    """
     FIGS.mkdir(parents=True, exist_ok=True)
-    for ext in ("pdf", "png"):
-        fig.savefig(FIGS / f"{name}.{ext}")
+    fig.savefig(FIGS / f"{name}.pdf", metadata={"CreationDate": None})
+    fig.savefig(FIGS / f"{name}.png")
     plt.close(fig)
     print(f"wrote {name}.pdf / .png")
 

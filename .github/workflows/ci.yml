@@ -48,12 +48,14 @@ jobs:
         run: python -m tests.generate_golden --check
 
       # The paper's central promise is that every figure regenerates from the committed
-      # CSVs with no GPU. If that stops being true, CI is where it should surface.
-      - name: Figures regenerate from the committed CSVs
+      # CSVs with no GPU. Rebuilding and asserting a clean tree is what makes that a
+      # checked invariant rather than a sentence: the figures carry no timestamp, so a
+      # rebuild is a no-op unless the data or the plotting code actually changed.
+      - name: Figures regenerate from the committed CSVs, byte for byte
         if: matrix.python == '3.12'
         run: |
           python paper/figures.py
-          git diff --stat -- paper/figures || true
+          git diff --exit-code -- paper/figures
 
   cuda-syntax:
     name: CUDA sources compile
