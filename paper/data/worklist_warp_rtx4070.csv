@@ -1,0 +1,7 @@
+automaton,num_states,words,n_strings,global_gbps,warp_gbps,speedup,gpu
+synthetic,512,8,4096,407.0559,560.1367,1.4,RTX4070
+synthetic,2048,32,4096,0.4854,5.9927,12.3,RTX4070
+synthetic,8192,128,4096,0.1237,1.548,12.5,RTX4070
+levenshtein,2787,44,4096,0.1252,0.464,3.7,RTX4070
+fermi,40786,638,4096,0.0109,0.0339,3.1,RTX4070
+brill,42661,667,4096,0.001,0.0089,8.9,RTX4070

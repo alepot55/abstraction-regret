@@ -1,0 +1,86 @@
+[build-system]
+# scikit-build-core drives CMake to (optionally) build the CUDA pybind11 extension.
+# The build is graceful: if no CUDA toolkit is found, the extension is skipped and
+# the pure-Python (CPU/Triton) package still installs and works.
+requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "gpufsm"
+version = "0.1.0"
+description = "Workload-driven study and portable framework for GPU finite-state-machine (NFA) processing: Triton vs CUDA."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Alessandro Potenza", email = "ap.alessandro.potenza@gmail.com" }]
+keywords = ["gpu", "automata", "nfa", "fsm", "regex", "triton", "cuda", "benchmark"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = ["numpy>=1.23"]
+
+[project.optional-dependencies]
+triton = ["triton>=3.0", "torch>=2.1"]
+warp = ["warp-lang>=1.0"]
+paper = ["matplotlib>=3.7", "pandas>=2.0"]
+bitgen = []  # optional heavy backend (BitGen, MICRO'25); kept out of the core
+dev = ["pytest>=7.4", "ruff>=0.5", "mypy>=1.8"]
+
+[project.scripts]
+gpufsm = "gpufsm.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/alepot55/gpufsm"
+
+[tool.scikit-build]
+# Build the CUDA extension only when explicitly requested (GPUFSM_BUILD_CUDA=1).
+# Default off so `pip install` works on CPU-only machines / CI.
+cmake.version = ">=3.18"
+wheel.packages = ["src/gpufsm"]
+# py.typed ships the type hints to downstream users; without it they are invisible.
+sdist.include = ["src/gpufsm/py.typed"]
+build-dir = "build/{wheel_tag}"
+
+[tool.scikit-build.cmake.define]
+GPUFSM_BUILD_CUDA = "OFF"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Warp kernels are a DSL: `int(0)` declares a mutable wp.int32 local — a bare
+# literal makes Warp miscompile later conditional reassignments. Keep the casts.
+# This glob MUST cover every module holding a @wp.kernel: while it pointed at the
+# pre-refactor filenames, `ruff --fix` rewrote `int(0)` to `0` inside the kernels —
+# a wrong-results bug that no CPU-only machine can observe.
+"src/gpufsm/backends/warp/*.py" = ["UP018"]
+
+[tool.mypy]
+# Deliberately NOT pinned to a python_version: mypy then checks against the interpreter it
+# runs under, which is the one that resolved the installed dependencies. A pin drifts from
+# the environment and fails on stubs the pinned version cannot parse -- current numpy stubs
+# use `type` aliases, which mypy rejects below 3.12 even though the code is fine. CI runs
+# the matrix in .github/workflows/ci.yml instead, so every supported version is checked.
+ignore_missing_imports = true
+files = ["src/gpufsm"]
+
+# Warp kernels are a DSL compiled by warp-lang, not ordinary Python: warp's typed
+# stubs flag bitwise ops on wp.uint64 inside @wp.kernel bodies. Don't type-check the
+# modules that contain them. (Only visible on a machine with warp installed — with
+# warp absent the import is Any and these overrides are inert.)
+[[tool.mypy.overrides]]
+module = "gpufsm.backends.warp.*"
+ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "gpu: test requires a CUDA GPU and/or Triton (skipped in CPU-only CI)",
+]

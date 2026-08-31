@@ -1,0 +1,7 @@
+automaton,num_states,transitions,global_gbps,warp_gbps,speedup,n_strings,gpu
+levenshtein,2787,9193,0.063,0.389,6.2,2048,RTX4070
+hamming,11349,2098174,0.002,0.003,1.4,2048,RTX4070
+brill,42661,4403099,0.001,0.006,11.8,2048,RTX4070
+fermi,40786,305345,0.007,0.028,4.1,2048,RTX4070
+randomforest,33223,6272090,0.001,0.017,27.3,2048,RTX4070
+corerings,48005,48005,0.453,4.472,9.9,2048,RTX4070

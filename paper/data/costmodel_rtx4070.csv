@@ -1,0 +1,19 @@
+backend,technique,num_states,traffic_bytes_per_sym,throughput_gbps,gpu,note
+triton,multistream,32,628,0.078,RTX4070,batch=4096x256B best-of-10
+triton,multistream,64,1236,0.022,RTX4070,
+triton,multistream,128,2660,0.003,RTX4070,
+triton,multistream,256,5140,0.001,RTX4070,
+cuda,multistream,32,596,1.026,RTX4070,
+cuda,multistream,64,1204,0.262,RTX4070,
+cuda,multistream,128,2596,0.047,RTX4070,
+cuda,multistream,256,5012,0.012,RTX4070,
+cuda,multistream_shared,32,0,1.027,RTX4070,traffic=0 ties multistream -> compute-bound
+cuda,multistream_shared,64,0,0.263,RTX4070,
+cuda,multistream_shared,128,0,0.047,RTX4070,
+cuda,multistream_shared,256,0,0.012,RTX4070,
+cuda,multistream_async,32,596,0.964,RTX4070,
+cuda,multistream_async,64,1204,0.258,RTX4070,
+cuda,multistream_async,128,2596,0.047,RTX4070,
+cuda,multistream_async,256,5012,0.012,RTX4070,
+warp,multistream,32,596,1.130,RTX4070,
+warp,multistream,64,1204,0.292,RTX4070,

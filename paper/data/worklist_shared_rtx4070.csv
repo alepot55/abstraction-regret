@@ -1,0 +1,5 @@
+num_states,words,warp_gbps,shared_gbps,shared_over_warp,gpu
+256,4,2.719,2.93,1.08,RTX4070
+512,8,46.022,45.765,0.99,RTX4070
+1024,16,2.738,2.999,1.1,RTX4070
+1536,24,2.667,2.86,1.07,RTX4070

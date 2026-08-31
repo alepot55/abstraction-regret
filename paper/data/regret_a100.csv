@@ -1,0 +1,4 @@
+num_states,triton_regret,warp_regret
+32,3.2,0.83
+48,3.2,0.80
+64,3.2,0.80

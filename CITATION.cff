@@ -1,0 +1,46 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software, please cite the HPEC 2026 paper below. If you need to cite the
+  software itself (a specific version, or the framework rather than the study), cite this
+  record as well.
+title: "abstraction-regret: a framework for measuring what a GPU DSL forecloses, at a fixed algorithm"
+abstract: >-
+  Research software measuring "abstraction regret" -- the performance a GPU DSL forecloses,
+  at a fixed algorithm, because it cannot express the memory layout or the control flow a
+  workload needs. Instantiated on finite automata across two faces (control-flow-bound NFA
+  simulation, memory-bound DFA simulation) and a paradigm axis (CUDA and NVIDIA Warp on the
+  thread-SIMT side, Triton and Gluon on the tile/SPMD side), with a CPU reference oracle that
+  every GPU kernel is validated bit-for-bit against and a falsifiable Triton/Gluon control.
+type: software
+authors:
+  - family-names: Potenza
+    given-names: Alessandro
+    email: ap.alessandro.potenza@gmail.com
+version: 0.1.0
+license: MIT
+repository-code: "https://github.com/alepot55/abstraction-regret"
+url: "https://github.com/alepot55/abstraction-regret"
+keywords:
+  - GPU
+  - automata
+  - NFA
+  - DFA
+  - Triton
+  - CUDA
+  - NVIDIA Warp
+  - Gluon
+  - abstraction regret
+  - performance portability
+  - domain-specific languages
+
+preferred-citation:
+  type: conference-paper
+  title: >-
+    The Two Faces of Abstraction Regret: Control-Flow and Memory-Layout Limits of GPU DSLs
+    on Irregular Automata
+  authors:
+    - family-names: Potenza
+      given-names: Alessandro
+  collection-title: "2026 IEEE High Performance Extreme Computing Conference (HPEC)"
+  year: 2026
+  # Add doi: and pages: once the IEEE Xplore record is live.

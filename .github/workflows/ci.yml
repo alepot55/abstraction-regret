@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  cpu:
+    # pyproject declares requires-python = ">=3.10". A claim nothing checks is a guess, so
+    # every version in that range is built and tested here rather than only the newest.
+    name: "lint + type + CPU tests (py${{ matrix.python }})"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install (pure-Python, no CUDA)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,paper]"
+
+      # Every tree that produces a number, not just the package: the drivers under
+      # scripts/ and the figure generator are what the published CSVs come out of, so
+      # they are held to the same lint and format standard as the library.
+      - name: Ruff (lint + format check)
+        run: |
+          ruff check src tests scripts paper/figures.py
+          ruff format --check src tests scripts paper/figures.py
+
+      - name: Mypy
+        run: mypy src/gpufsm
+
+      - name: Pytest (CPU-only, GPU tests skipped)
+        run: pytest -m "not gpu" -q
+
+      # The golden corpus pins the ORACLE'S SEMANTICS. test_golden fails when they change;
+      # regenerating the corpus makes it pass again. This asks the opposite question -- would
+      # regenerating change anything? -- so a semantic change cannot be absorbed silently.
+      - name: Golden corpus still matches the oracles
+        run: python -m tests.generate_golden --check
+
+      # The paper's central promise is that every figure regenerates from the committed
+      # CSVs with no GPU. If that stops being true, CI is where it should surface.
+      - name: Figures regenerate from the committed CSVs
+        if: matrix.python == '3.12'
+        run: |
+          python paper/figures.py
+          git diff --stat -- paper/figures || true
+
+  cuda-syntax:
+    name: CUDA sources compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The kernels are split one translation unit per family and compiled without
+      # relocatable device code, so a __device__ helper called across a TU boundary
+      # is a link error. No GPU is needed to catch that — only nvcc. This is the
+      # cheapest guard that the split stays valid; a full build and the GPU tests
+      # still need real hardware (see docs/REPRODUCIBILITY.md).
+      - name: Install the CUDA toolkit (nvcc only)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nvidia-cuda-toolkit
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pybind11 headers
+        run: pip install pybind11
+
+      - name: Compile every translation unit
+        run: |
+          INC="$(python -c 'import pybind11; print(pybind11.get_include())')"
+          PYINC="$(python -c 'import sysconfig; print(sysconfig.get_paths()["include"])')"
+          for cu in src/gpufsm/backends/cuda/native/*.cu; do
+            echo "== $cu"
+            nvcc -std=c++17 -c "$cu" -o /dev/null \
+              -I src/gpufsm/backends/cuda/native -I "$INC" -I "$PYINC" \
+              --expt-relaxed-constexpr
+          done

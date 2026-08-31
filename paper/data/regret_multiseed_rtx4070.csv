@@ -1,0 +1,4 @@
+num_states,triton_regret_med,triton_min,triton_max,warp_regret_med,warp_min,warp_max,seeds,gpu
+32,7.1,6.59,9.15,0.85,0.78,3.34,5,RTX4070
+48,7.09,7.02,9.37,0.85,0.83,2.39,5,RTX4070
+64,7.06,6.99,9.21,0.85,0.83,1.83,5,RTX4070
