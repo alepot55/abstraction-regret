@@ -125,8 +125,9 @@ once eleven copies of `random_nfa`, and they had drifted.
 
 Two invariants the harness enforces rather than documents:
 
-- `oracle.require` raises before anything is timed, so a throughput cannot be printed for a
-  kernel that disagrees with the reference.
+- `oracle.require` raises before anything is timed, so a driver cannot print a throughput for
+  a kernel that disagrees with the reference. Every driver that reports an automaton
+  throughput calls it; the four that do not report one are listed in `docs/THREATS.md`.
 - `csvio.guard_device` refuses to overwrite a committed CSV whose recorded GPU differs from
   the live one. The committed files carry the device in their filename; re-running elsewhere
   used to rewrite them in place, leaving a file that claimed a device it was never measured on.

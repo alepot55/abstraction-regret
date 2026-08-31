@@ -69,7 +69,7 @@ run_batch(dfa, [b"abc", b"xyz"], backend=Backend.CUDA)
 ```bash
 gpufsm env        # environment + available backends, per automaton kind
 gpufsm list       # every registered (kind, backend, technique)
-gpufsm verify     # check the default technique of every backend against the CPU reference
+gpufsm verify     # every registered NFA technique against the CPU reference
 gpufsm bench --backend cpu --size 4096 --repeats 10
 ```
 
