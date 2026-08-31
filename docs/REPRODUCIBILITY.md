@@ -36,7 +36,7 @@ captures them, and the sweep CSV records them per row.
 ## Correctness
 
 ```bash
-pytest -m "not gpu" -q    # 982 CPU tests: oracle semantics, bit-packed spec, generators,
+pytest -m "not gpu" -q    # the CPU suite: oracle semantics, bit-packed spec, generators,
                           # ANML loader, cost model, CLI, API, committed-data contracts
 pytest -m gpu -q          # GPU backends against the oracle (needs a GPU) — see the warning
 python scripts/oracle_gate.py --require cuda,triton,warp

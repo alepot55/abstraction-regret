@@ -115,8 +115,9 @@ algorithm, so letting each DSL pick its own would measure algorithmic redesign i
 Figures and the correctness suite need **no GPU**:
 
 ```bash
-pytest -m "not gpu" -q     # 982 CPU tests: oracle semantics, bit-packed spec, generators,
-                           # IO, validation, and the committed-CSV contracts
+pytest -m "not gpu" -q     # the whole CPU suite: oracle semantics, the bit-packed spec,
+                           # the generators, the ANML loader, input validation, and the
+                           # contracts on the committed CSVs
 python paper/figures.py    # every figure in the paper, from the committed CSVs
 ```
 

@@ -44,7 +44,7 @@ gpufsm env      # records python / backend availability + versions; check the ba
 ## Workflow
 
 ```bash
-pytest -m "not gpu" -q                   # 982 CPU tests, no GPU
+pytest -m "not gpu" -q                   # the CPU suite, no GPU
 python paper/figures.py                  # every figure, from the committed CSVs, no GPU
 
 python scripts/oracle_gate.py --require cuda,triton,warp   # correctness, strictly
@@ -65,7 +65,7 @@ python scripts/gluon_probe.py            # 0 confirmed, 1 falsified, 2 inconclus
 
 | Experiment | Expected |
 |---|---|
-| `pytest -m "not gpu"` | 982 passed, 24 deselected |
+| `pytest -m "not gpu"` | all pass; the 24 gpu-marked tests are deselected |
 | `oracle_gate.py` | every available triple `ok`; a required-but-absent backend fails the run |
 | `figures.py` | six figures rewritten; `git diff` shows only re-render noise |
 | technique sweep | Triton 6-8x slower than CUDA at equal algorithm; Warp near parity |
