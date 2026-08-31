@@ -82,8 +82,8 @@ Four invariants carry the study. Each is one place in the code, on purpose.
 - **One extension point** — `gpufsm.core.registry`: a backend or a technique is one module plus
   one `@register(Kind, Backend, "name")` line. Nothing dispatches on a hand-parsed string.
 - **One oracle** — `gpufsm.reference`: a CPU simulator with latch-first-match semantics. Every
-  backend reproduces its `(accepted, match_len)` bit-for-bit, and no measurement reports a
-  throughput before that check passes (`gpufsm.bench.oracle.require`).
+  backend reproduces its `(accepted, match_len)` bit-for-bit, and every driver that reports an
+  automaton throughput calls `gpufsm.bench.oracle.require` before timing anything.
 - **One harness** — `gpufsm.bench`: the random automata, the timing statistics, the CSV schema.
   The drivers under `scripts/` are thin, so two measurements cannot disagree about what a
   "median throughput" is.

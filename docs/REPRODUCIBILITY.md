@@ -57,10 +57,15 @@ gpufsm verify             # quick: the default technique per backend, NFA exampl
 
 ## Claims to commands
 
-Every driver below gates on the CPU oracle before it reports a throughput, and refuses to
-overwrite a committed CSV that was measured on a different GPU
+Every driver that reports a throughput for an automaton gates on the CPU oracle first, and
+refuses to overwrite a committed CSV measured on a different GPU
 (`gpufsm.bench.csvio.guard_device`). All of them write through the schema-checked
 `write_rows`, so a renamed column is an error rather than a silently dropped measurement.
+
+Four scripts have no oracle gate, and none of them reports an automaton throughput:
+`gluon_probe.py` is a compile probe, `profile_target.py` issues one launch for `ncu`,
+`validate_costmodel.py` only re-reads a committed CSV, and `ablate_scalar_control.py`
+compares two raw Triton kernels that are not automata at all.
 
 | Claim | Command | Artifact |
 |---|---|---|

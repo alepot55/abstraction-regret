@@ -21,6 +21,7 @@ import numpy as np
 from gpufsm.api import run_batch
 from gpufsm.bench import random_batch, random_nfa
 from gpufsm.bench.csvio import guard_device, write_rows
+from gpufsm.bench.oracle import require
 from gpufsm.bench.timing import bootstrap_ci95
 from gpufsm.core.registry import Backend, available_backends, list_techniques
 
@@ -75,6 +76,10 @@ def env_info() -> dict[str, str]:
 
 
 def measure(nfa, backend, technique, batch, total_bytes) -> dict | None:
+    # Nothing reports a throughput before it agrees with the CPU reference. This driver
+    # produces the CSV behind the headline 2x2, and it was the one measurement path that
+    # never called the gate.
+    require(nfa, batch, backend=backend, technique=technique)
     for _ in range(_WARMUP):
         run_batch(nfa, batch, backend=backend, technique=technique)
     samples = []

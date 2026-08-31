@@ -24,6 +24,7 @@ from pathlib import Path
 from gpufsm import run_batch
 from gpufsm.bench import DENSE, random_batch, random_nfa
 from gpufsm.bench.csvio import environment, guard_device, write_rows
+from gpufsm.bench.oracle import require
 
 SIZES = [32, 48, 64]
 SEEDS = range(5)
@@ -60,6 +61,7 @@ def main() -> int:
     bits = N_STRINGS * SLEN * 8
 
     def gbps(nfa, be, te):
+        require(nfa, batch, backend=be, technique=te)
         for _ in range(WARMUP):
             run_batch(nfa, batch, be, te)
         ms = statistics.median(run_batch(nfa, batch, be, te)[0].kernel_ms for _ in range(RUNS))

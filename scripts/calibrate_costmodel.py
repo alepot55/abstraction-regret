@@ -23,6 +23,7 @@ from pathlib import Path
 from gpufsm.api import run_batch
 from gpufsm.bench import random_batch, random_nfa
 from gpufsm.bench.csvio import environment, guard_device, write_rows
+from gpufsm.bench.oracle import require
 from gpufsm.core.registry import Backend, available_backends, list_techniques
 from gpufsm.costmodel import Measurement, calibrate, relative_error, traffic_per_symbol
 
@@ -48,7 +49,12 @@ _MULTISTREAM = {"multistream", "multistream_shared", "multistream_async"}
 
 
 def throughput_gbps(nfa, backend, technique, batch, total_bytes, repeats: int = 10) -> float:
-    """Batched multi-stream throughput: total input bits / batch kernel time."""
+    """Batched multi-stream throughput: total input bits / batch kernel time.
+
+    Gated on the CPU reference first: a fitted constant derived from a wrong kernel is
+    worse than no constant, because it looks like a measurement.
+    """
+    require(nfa, batch, backend=backend, technique=technique)
     best_ms = float("inf")
     for _ in range(3):  # warmup
         run_batch(nfa, batch, backend=backend, technique=technique)

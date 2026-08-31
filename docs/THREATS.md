@@ -130,11 +130,18 @@ smallest measurement. This is a real asymmetry in the code and an immaterial one
 
 ## 6. The correctness gate is not in every driver's path
 
-`gpufsm.bench.oracle.require` runs before timing in the drivers that call it, and every driver
-in `scripts/` now does. Historically several did not, and two compared two GPU kernels against
-*each other* rather than against the reference — a check that passes whenever both are wrong
-in the same way. `scripts/oracle_gate.py` is the comprehensive check; `pytest -m gpu` is not,
-because a gpu-marked test whose backend failed to build skips, and a skip counts as a pass.
+`gpufsm.bench.oracle.require` now runs before timing in every driver that reports an automaton
+throughput — including `sweep_techniques.py`, `calibrate_costmodel.py` and `regret_multiseed.py`,
+the three that produce the headline CSVs and were the ones that never called it. Two others
+compared two GPU kernels against *each other* rather than against the reference, a check that
+passes whenever both are wrong in the same way; they use the oracle now.
+
+The four scripts with no gate report no automaton throughput: `gluon_probe.py` (a compile
+probe), `profile_target.py` (one launch for `ncu`), `validate_costmodel.py` (re-reads a
+committed CSV) and `ablate_scalar_control.py` (two raw Triton kernels, no automaton).
+
+`scripts/oracle_gate.py` is the comprehensive check; `pytest -m gpu` is not, because a
+gpu-marked test whose backend failed to build skips, and a skip counts as a pass.
 
 ## 7. Absolute throughput is far from state of the art
 
