@@ -8,6 +8,9 @@ kind from the automaton itself.
 
 from __future__ import annotations
 
+import re as _re
+from pathlib import Path as _Path
+
 import pytest
 
 from gpufsm import (
@@ -118,3 +121,52 @@ def test_get_factory_resolves_none_to_the_declared_default() -> None:
 
     technique, _ = get_factory(Kind.NFA, Backend.CPU, None)
     assert technique == "reference"
+
+
+# --- and the same check without a GPU, where the live registry is nearly empty -------
+#
+# The test above walks `_REGISTRY`, which on a CPU-only machine holds three CPU triples. That
+# is exactly the machine CI runs on, so it would pass while saying nothing about the GPU
+# backends -- the ones whose default actually decides what a benchmark measures. This reads
+# the declarations out of the sources instead.
+
+_BACKEND_DIR = _Path(__file__).resolve().parent.parent / "src" / "gpufsm" / "backends"
+
+
+def _declared_defaults() -> dict[tuple[str, str], list[str]]:
+    """(backend, kind) -> techniques marked default=True, scraped from the sources."""
+    out: dict[tuple[str, str], list[str]] = {}
+    for path in _BACKEND_DIR.rglob("*.py"):
+        text = path.read_text()
+        backend_dir = path.relative_to(_BACKEND_DIR).parts[0].removesuffix(".py")
+        # decorator form: @register(Kind.X, Backend.Y, "name", default=True)
+        for kind, be, tech in _re.findall(
+            r'register\(\s*Kind\.(\w+),\s*Backend\.(\w+),\s*"([^"]+)",\s*default=True', text
+        ):
+            out.setdefault((be.lower(), kind.lower()), []).append(tech)
+        # loop form: register(..., default=(_tech == "name"))
+        for kind, be, tech in _re.findall(
+            r"register\(\s*(?:Kind\.)?(\w+),\s*Backend\.(\w+),\s*_tech,\s*"
+            r'default=\(_tech == "([^"]+)"\)',
+            text,
+        ):
+            key = (be.lower(), "nfa" if kind in ("NFA", "_kind") else kind.lower())
+            out.setdefault(key, []).append(tech)
+        # the CPU table drives both kinds from one call
+        if backend_dir == "cpu" and 'default=(_tech == "reference")' in text:
+            out.setdefault(("cpu", "nfa"), []).append("reference")
+            out.setdefault(("cpu", "dfa"), []).append("reference")
+    return out
+
+
+def test_the_default_scrape_found_the_gpu_backends() -> None:
+    """Guard the guard: a regex matching nothing would make the next test vacuous."""
+    found = _declared_defaults()
+    for key in (("cuda", "nfa"), ("cuda", "dfa"), ("triton", "nfa"), ("warp", "nfa")):
+        assert key in found, f"no default scraped for {key}; the regex has drifted"
+
+
+def test_no_backend_declares_two_defaults_for_one_kind() -> None:
+    """`register` raises on a second declaration, but only if both modules get imported."""
+    for key, techniques in sorted(_declared_defaults().items()):
+        assert len(set(techniques)) == 1, f"{key} declares defaults {sorted(set(techniques))}"

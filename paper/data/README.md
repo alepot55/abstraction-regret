@@ -9,8 +9,10 @@ Two conventions hold across all of them:
 - **Throughput is Gbit/s of input consumed by the batch kernel**, median over repeated
   launches after warmup. Host/device transfer is measured separately and never folded in.
 - **Nothing here was written before the CPU oracle agreed with the kernel.** Every driver
-  calls `gpufsm.bench.oracle.require` and aborts on a mismatch rather than reporting a
-  throughput (`src/gpufsm/bench/oracle.py`).
+  that produced a file in this directory calls `gpufsm.bench.oracle.require` and aborts on a
+  mismatch rather than reporting a throughput (`src/gpufsm/bench/oracle.py`). The two
+  exceptions in the table below measure no automaton: `scalar_ablation` compares two raw
+  Triton kernels, and `nsight` is a profiler transcript.
 
 ## Measured directly by a script in this repository
 

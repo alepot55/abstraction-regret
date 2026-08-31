@@ -98,4 +98,4 @@ all, and Triton (tile) expresses it at 10.1× cost, while Warp (thread) is essen
   ngAP/CUDA.
 - Throughputs here are absolute-low (single-thread-per-string, full-scan); they are for
   *relative* DSL/technique comparison, not SOTA throughput claims.
-- Validate on a 2nd GPU architecture before the camera-ready (generality).
+- Validated on a second architecture (A100): `paper/data/regret_a100.csv`, `dfa_knee*_a100.csv`.

@@ -59,13 +59,14 @@ python scripts/regret_multiseed.py       # multi-seed robustness
 python scripts/run_anmlzoo.py            # six real automata, oracle-gated
 python scripts/second_gpu.py --profile rich   # cross-architecture re-run
 python scripts/gluon_probe.py            # 0 confirmed, 1 falsified, 2 inconclusive, 3 skipped
+python scripts/dfa_latch_control.py      # the open DFA control (docs/THREATS.md), not yet run
 ```
 
 ## Expected results
 
 | Experiment | Expected |
 |---|---|
-| `pytest -m "not gpu"` | all pass; the 24 gpu-marked tests are deselected |
+| `pytest -m "not gpu"` | all pass; the gpu-marked tests are deselected |
 | `oracle_gate.py` | every available triple `ok`; a required-but-absent backend fails the run |
 | `figures.py` | six figures rewritten; `git diff` shows only re-render noise |
 | technique sweep | Triton 6-8x slower than CUDA at equal algorithm; Warp near parity |

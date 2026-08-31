@@ -8,7 +8,7 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "gpufsm"
 version = "0.1.0"
-description = "Workload-driven study and portable framework for GPU finite-state-machine (NFA) processing: Triton vs CUDA."
+description = "Measuring what a GPU DSL forecloses at a fixed algorithm: CUDA, Triton, NVIDIA Warp and Gluon on NFA and DFA simulation."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
