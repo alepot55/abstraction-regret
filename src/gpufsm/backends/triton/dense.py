@@ -148,7 +148,7 @@ class TritonDenseExecutor:
         )
 
 
-@register(Kind.NFA, Backend.TRITON, "dense")
+@register(Kind.NFA, Backend.TRITON, "dense", default=True)
 def _make(automaton: Automaton, technique: str) -> TritonDenseExecutor:
     assert isinstance(automaton, NFA)
     return TritonDenseExecutor(automaton, technique)

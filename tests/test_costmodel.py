@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import math
+import re
+from pathlib import Path
 
 import pytest
 
 from gpufsm.core.nfa import NFABuilder
 from gpufsm.costmodel import (
+    _RESIDENCY,
     CostModel,
     Measurement,
     Residency,
@@ -101,3 +104,57 @@ def test_calibrate_recovers_known_params():
 def test_calibrate_requires_two_points():
     with pytest.raises(ValueError):
         calibrate([Measurement(_chain(8), "cuda", "dense", 10.0)])
+
+
+# --- the cost model must know every technique it could be asked about ----------------
+#
+# `traffic_per_symbol` used to fall back to GLOBAL_WORD for an undeclared (backend,
+# technique), which silently modelled the entire worklist family -- the work-efficient
+# kernels the thesis turns on -- as something it had never been told about. It now raises,
+# and this pins the declaration against the technique names the backends actually register.
+# The names are read out of the backend sources rather than the live registry because the
+# CPU suite runs without torch, triton or the CUDA extension, so the registry is nearly
+# empty here and would make the test vacuous.
+
+_BACKENDS = Path(__file__).resolve().parent.parent / "src" / "gpufsm" / "backends"
+
+
+def _declared_nfa_techniques() -> set[tuple[str, str]]:
+    """(backend, technique) pairs registered for NFAs, scraped from the sources."""
+    found: set[tuple[str, str]] = set()
+    for path in _BACKENDS.rglob("*.py"):
+        text = path.read_text()
+        backend = path.relative_to(_BACKENDS).parts[0].removesuffix(".py")
+        # @register(Kind.NFA, Backend.X, "name")
+        for be, tech in re.findall(r'register\(\s*Kind\.NFA,\s*Backend\.(\w+),\s*"([^"]+)"', text):
+            found.add((be.lower(), tech))
+        # the CUDA dicts: SINGLE_TECHNIQUES / BATCH_TECHNIQUES map technique -> entry point
+        for block in re.findall(r"(?:SINGLE|BATCH)_TECHNIQUES\s*=\s*\{(.*?)\n\}", text, re.S):
+            for tech in re.findall(r'"([a-z_]+)"\s*:\s*"run_', block):
+                found.add((backend, tech))
+        # the CPU table: (Kind.NFA, "name"): ...
+        for tech in re.findall(r'\(Kind\.NFA,\s*"([^"]+)"\)', text):
+            found.add(("cpu", tech))
+    return found
+
+
+def test_every_registered_nfa_technique_has_a_declared_residency() -> None:
+    missing = sorted(_declared_nfa_techniques() - set(_RESIDENCY))
+    assert not missing, f"no residency declared in gpufsm.costmodel for: {missing}"
+
+
+def test_the_scrape_actually_found_the_families_it_should() -> None:
+    """Guard the guard: a regex that matched nothing would make the test above vacuous."""
+    found = _declared_nfa_techniques()
+    assert ("cuda", "worklist_global") in found
+    assert ("triton", "multistream") in found
+    assert ("cpu", "reference") in found
+    assert len(found) >= 15, f"scrape found only {len(found)} techniques"
+
+
+def test_an_undeclared_technique_raises_instead_of_guessing() -> None:
+    b = NFABuilder()
+    s0 = b.add_state(accept=True)
+    b.set_start(s0)
+    with pytest.raises(KeyError, match="no working-set residency"):
+        traffic_per_symbol(b.build(), "cuda", "a_technique_that_does_not_exist")

@@ -32,6 +32,7 @@ two constants needs measured throughput (GPU), done from the sweep data.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 
@@ -53,17 +54,32 @@ class Residency(str, Enum):
 # Map (backend, technique) -> working-set residency. Drives the memory term.
 # CUDA/Warp bit-packed kernels keep the word(s) in registers; the Triton bit-packed
 # kernel stores them in a global scratch tensor (it cannot express register residency).
+#
+# Every registered NFA technique must appear here. It used to cover eleven of them and
+# fall back to GLOBAL_WORD for the rest, which silently modelled the whole worklist family
+# -- the work-efficient kernels the thesis turns on -- as something it had never been told
+# about. `tests/test_costmodel.py` pins the coverage against the registry.
 _RESIDENCY: dict[tuple[str, str], Residency] = {
     ("cpu", "reference"): Residency.GLOBAL_BYTE,
     ("cpu", "bitmap"): Residency.GLOBAL_WORD,
     ("triton", "dense"): Residency.GLOBAL_BYTE,
     ("triton", "bitpacked"): Residency.GLOBAL_WORD,
     ("triton", "multistream"): Residency.GLOBAL_WORD,
+    # Triton's worklist holds the active set in one scalar int64 register, which is why it
+    # is capped at 64 states; nothing about the set spills to global memory per symbol.
+    ("triton", "worklist"): Residency.REGISTER,
     ("cuda", "dense"): Residency.GLOBAL_BYTE,
     ("cuda", "bitpacked"): Residency.REGISTER,
     ("cuda", "multistream"): Residency.REGISTER,
     ("cuda", "multistream_shared"): Residency.REGISTER,
     ("cuda", "multistream_async"): Residency.REGISTER,
+    # Worklist family: `worklist` is the register-resident path (<=512 states); the others
+    # deliberately move the working set out of registers, which is the axis they ablate.
+    ("cuda", "worklist"): Residency.REGISTER,
+    ("cuda", "worklist_global"): Residency.GLOBAL_WORD,
+    ("cuda", "worklist_warp"): Residency.GLOBAL_WORD,
+    ("cuda", "worklist_shared"): Residency.GLOBAL_WORD,
+    ("cuda", "worklist_compact"): Residency.GLOBAL_WORD,
     ("warp", "multistream"): Residency.REGISTER,
 }
 
@@ -107,8 +123,19 @@ def csr_traffic_per_symbol(nfa: NFA, in_shared: bool = False) -> int:
 
 
 def traffic_per_symbol(nfa: NFA, backend: str, technique: str) -> int:
-    """Total modeled global-memory bytes moved per input symbol for a technique."""
-    residency = _RESIDENCY.get((backend, technique), Residency.GLOBAL_WORD)
+    """Total modeled global-memory bytes moved per input symbol for a technique.
+
+    Raises on a technique whose residency has not been declared. Guessing one produces a
+    prediction that looks as authoritative as a modelled one, and the cost model's whole
+    job is to say which regime a kernel is in.
+    """
+    try:
+        residency = _RESIDENCY[(backend, technique)]
+    except KeyError:
+        raise KeyError(
+            f"no working-set residency declared for {backend}/{technique}; "
+            f"add it to gpufsm.costmodel._RESIDENCY"
+        ) from None
     in_shared = technique == "multistream_shared"
     return working_set_traffic_per_symbol(nfa, residency) + csr_traffic_per_symbol(
         nfa, in_shared=in_shared
@@ -156,8 +183,15 @@ def calibrate(measurements: list[Measurement]) -> CostModel:
 
     Each measurement gives ``time_per_symbol = 8e-9/throughput_gbps`` (seconds) and a
     linear equation ``time = a*traffic + b*num_states**2`` with ``a = 1/bandwidth`` and
-    ``b = compute_s_per_state2``. We solve for (a, b) over all points, clamp to be
-    physical, and return the fitted model. Requires >= 2 points spanning techniques.
+    ``b = compute_s_per_state2``. Requires >= 2 points spanning techniques.
+
+    A negative fitted ``a`` means the data carry no memory term at all -- the kernel is
+    compute-bound, and the unconstrained solve is describing noise. Rather than clamp ``a``
+    to a tiny positive number (which reported an effective bandwidth of 10^9 GB/s, six orders
+    above any real device, while leaving ``b`` fitted against a memory term that had just been
+    removed), refit ``b`` alone on the ``n^2`` column and represent the compute-bound case
+    honestly as an infinite bandwidth. The returned pair is then the solution of a
+    well-posed problem in both branches, which is what ``relative_error`` assumes.
     """
     import numpy as np
 
@@ -176,9 +210,18 @@ def calibrate(measurements: list[Measurement]) -> CostModel:
     a_mat = np.asarray(rows, dtype=float)
     b_vec = np.asarray(rhs, dtype=float)
     coef, *_ = np.linalg.lstsq(a_mat, b_vec, rcond=None)
-    a = max(float(coef[0]), 1e-18)  # 1/bandwidth (s/byte)
-    b = max(float(coef[1]), 0.0)  # s/state^2
-    return CostModel(eff_bandwidth_bytes_per_s=1.0 / a, compute_s_per_state2=b)
+    a = float(coef[0])  # 1/bandwidth (s/byte)
+    if a <= 0.0:
+        # Compute-bound: refit the compute term alone so (a, b) stay mutually consistent.
+        coef_b, *_ = np.linalg.lstsq(a_mat[:, 1:2], b_vec, rcond=None)
+        return CostModel(
+            eff_bandwidth_bytes_per_s=math.inf,
+            compute_s_per_state2=max(float(coef_b[0]), 0.0),
+        )
+    return CostModel(
+        eff_bandwidth_bytes_per_s=1.0 / a,
+        compute_s_per_state2=max(float(coef[1]), 0.0),
+    )
 
 
 def relative_error(model: CostModel, m: Measurement) -> float:

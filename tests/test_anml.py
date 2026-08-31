@@ -93,3 +93,77 @@ def test_load_anml_empty_raises(tmp_path):
     p.write_text('<?xml version="1.0"?><automata-network id="t"></automata-network>')
     with pytest.raises(ValueError):
         load_anml(p)
+
+
+# --- the loader must refuse a file it cannot parse, not guess ------------------------
+#
+# The module promises that "a partially-understood file never produces a wrong automaton".
+# Four deviations used to break that promise silently. None of them occurs in the six pinned
+# ANMLZoo families -- verified by loading all six before and after this change and comparing
+# the CSR arrays byte for byte -- so these paths only fire on a file that would previously
+# have been mis-parsed into a different language.
+
+_TEMPLATE = """<anml><automata-network>{body}</automata-network></anml>"""
+
+
+def _load(tmp_path, body: str):
+    p = tmp_path / "a.anml"
+    p.write_text(_TEMPLATE.format(body=body))
+    return load_anml(p)
+
+
+class TestLoaderRefusesMalformedFiles:
+    def test_duplicate_ste_id_raises(self, tmp_path) -> None:
+        body = (
+            '<state-transition-element id="s" symbol-set="a" start="start-of-data"/>'
+            '<state-transition-element id="s" symbol-set="b"/>'
+        )
+        with pytest.raises(ValueError, match="duplicate"):
+            _load(tmp_path, body)
+
+    def test_missing_ste_id_raises(self, tmp_path) -> None:
+        body = '<state-transition-element symbol-set="a" start="start-of-data"/>'
+        with pytest.raises(ValueError, match="without an 'id'"):
+            _load(tmp_path, body)
+
+    def test_dangling_activate_target_raises(self, tmp_path) -> None:
+        """A lost edge is a different language; it used to be dropped in silence."""
+        body = (
+            '<state-transition-element id="s" symbol-set="a" start="start-of-data">'
+            '<activate-on-match element="NOSUCH"/>'
+            "</state-transition-element>"
+        )
+        with pytest.raises(ValueError, match="activates unknown element"):
+            _load(tmp_path, body)
+
+    def test_activate_target_with_port_resolves(self, tmp_path) -> None:
+        """ANML writes the target as "id:port"; the id is what identifies the element."""
+        body = (
+            '<state-transition-element id="s" symbol-set="a" start="start-of-data">'
+            '<activate-on-match element="t:in"/>'
+            "</state-transition-element>"
+            '<state-transition-element id="t" symbol-set="b">'
+            "<report-on-match/>"
+            "</state-transition-element>"
+        )
+        nfa = _load(tmp_path, body)
+        assert simulate(nfa, b"ab") == (True, 2)
+
+    def test_symbol_set_error_names_the_ste(self, tmp_path) -> None:
+        body = '<state-transition-element id="s" symbol-set="[0x4]" start="start-of-data"/>'
+        with pytest.raises(ValueError, match="STE 's'"):
+            _load(tmp_path, body)
+
+
+class TestSymbolSetTokenizer:
+    @pytest.mark.parametrize("text", ["[0x4]", "[0xZZ]", "[]", "[^]"])
+    def test_malformed_symbol_sets_raise(self, text: str) -> None:
+        with pytest.raises(ValueError):
+            parse_symbol_set(text)
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [("[0x41]", {0x41}), ("[\\x41]", {0x41}), ("[0x41-0x43]", {0x41, 0x42, 0x43})],
+    )
+    def test_both_hex_prefixes_still_parse(self, text: str, expected: set[int]) -> None:
+        assert parse_symbol_set(text) == expected

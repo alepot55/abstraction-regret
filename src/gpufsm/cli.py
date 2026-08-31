@@ -7,6 +7,7 @@ import platform
 import sys
 
 from .api import benchmark, run
+from .backends import IMPORT_ERRORS
 from .bench import sweep, write_csv
 from .core.registry import Backend, Kind, available_backends, list_kinds, list_techniques
 from .examples import EXAMPLES
@@ -29,6 +30,16 @@ def _cmd_env(_: argparse.Namespace) -> int:
     for b in avail:
         for k in list_kinds(b):
             print(f"  {b.value:7s} {k.value}: {_techniques_line(b, k)}")
+
+    # Name the missing ones too, with the reason where there is one. "Which backends do I
+    # have" is the question this command exists to answer, and a backend that is absent
+    # because its import blew up looks exactly like one that was never installed.
+    missing = [b for b in Backend if b not in avail]
+    if missing:
+        print(f"missing  : {', '.join(b.value for b in missing)}")
+        for b in missing:
+            why = IMPORT_ERRORS.get(b.value)
+            print(f"  {b.value:7s} {why}" if why else f"  {b.value:7s} not installed")
     return 0
 
 
@@ -45,7 +56,17 @@ def _cmd_list(_: argparse.Namespace) -> int:
 
 
 def _cmd_verify(args: argparse.Namespace) -> int:
-    """Check every available backend agrees with the CPU reference on examples."""
+    """Check every available backend and technique agrees with the CPU reference.
+
+    Two properties this command must have and previously did not. It walks *every*
+    registered NFA technique, not just each backend's default, because the default is
+    whichever module imported first. And a kernel that raises is a failure to report, not a
+    traceback to print: a verification command that dies on the first broken backend tells
+    you less than one that finishes and lists what broke.
+
+    ``scripts/oracle_gate.py`` remains the thorough check -- it covers DFAs, randomized
+    inputs and required-backend enforcement. This one is the quick smoke test.
+    """
     failures = 0
     backends = available_backends()
     for name, factory in EXAMPLES.items():
@@ -60,14 +81,21 @@ def _cmd_verify(args: argparse.Namespace) -> int:
             for b in backends:
                 if b == Backend.CPU:
                     continue
-                res = run(nfa, data, backend=b)
-                agree = res.matches(ref)
-                if not agree:
-                    failures += 1
-                print(
-                    f"     {b.value}/{name:16s} {'agrees' if agree else 'DIFFERS'} "
-                    f"(accepted={res.accepted}, len={res.match_len})"
-                )
+                for tech in list_techniques(b, Kind.NFA):
+                    label = f"{b.value}/{tech}"
+                    try:
+                        res = run(nfa, data, backend=b, technique=tech)
+                    except Exception as exc:
+                        failures += 1
+                        print(f"     {label:28s} ERROR {type(exc).__name__}: {exc}")
+                        continue
+                    agree = res.matches(ref)
+                    if not agree:
+                        failures += 1
+                    print(
+                        f"     {label:28s} {'agrees' if agree else 'DIFFERS'} "
+                        f"(accepted={res.accepted}, len={res.match_len})"
+                    )
     print(f"\n{failures} failure(s).")
     return 1 if failures else 0
 

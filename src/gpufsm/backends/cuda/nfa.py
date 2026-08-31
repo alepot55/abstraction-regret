@@ -131,7 +131,9 @@ def _make_batch(automaton: Automaton, technique: str) -> CUDABatchExecutor:
     return CUDABatchExecutor(automaton, technique)
 
 
+# 'dense' was the emergent default (first single technique registered); declaring it
+# keeps behaviour identical while making the choice reviewable.
 for _tech in SINGLE_TECHNIQUES:
-    register(Kind.NFA, Backend.CUDA, _tech)(_make_single)
+    register(Kind.NFA, Backend.CUDA, _tech, default=(_tech == "dense"))(_make_single)
 for _tech in BATCH_TECHNIQUES:
     register(Kind.NFA, Backend.CUDA, _tech)(_make_batch)

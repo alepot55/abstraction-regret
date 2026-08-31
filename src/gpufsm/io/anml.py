@@ -26,12 +26,17 @@ needs its data fetched with a pinned checksum (see :mod:`gpufsm.io.datasets`).
 
 from __future__ import annotations
 
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from ..core.nfa import ANY_SYMBOL, NFA, NFABuilder
 
 _ALL_BYTES = range(256)
+
+
+_HEX_ATOM = re.compile(r"(?:0x|\\x)[0-9a-fA-F]{2}")
+"""Exactly two hex digits after the prefix; anything shorter is a malformed atom."""
 
 
 def _parse_atom(tok: str) -> int:
@@ -58,13 +63,20 @@ def parse_symbol_set(s: str) -> set[int]:
     negate = body.startswith("^")
     if negate:
         body = body[1:]
+    if not body:
+        raise ValueError(f"empty ANML symbol-set {s!r}: the STE would be unreachable")
 
-    # Tokenize into atoms: 0xHH | \xHH | single char.
+    # Tokenize into atoms: 0xHH | \xHH | single char. A hex prefix must be followed by
+    # exactly two hex digits -- taking four characters blindly turned a truncated atom at
+    # the end of a class into a different, plausible byte value ("[0x4]" parsed as 0x04).
     tokens: list[str] = []
     i = 0
     while i < len(body):
         if body[i : i + 2].lower() in ("0x", "\\x"):
-            tokens.append(body[i : i + 4])
+            atom = body[i : i + 4]
+            if not _HEX_ATOM.fullmatch(atom):
+                raise ValueError(f"malformed hex atom {atom!r} in ANML symbol-set {s!r}")
+            tokens.append(atom)
             i += 4
         else:
             tokens.append(body[i])
@@ -125,7 +137,27 @@ def load_anml(path: str | Path) -> NFA:
     if not stes:
         raise ValueError(f"no state-transition-element found in {path}")
 
-    symset = {ste.get("id"): parse_symbol_set(ste.get("symbol-set", "*")) for ste in stes}
+    # Validate the ids before allocating anything. Keying a dict on `ste.get("id")` meant a
+    # missing id became the key None and two STEs sharing an id collapsed into one state,
+    # in both cases leaving an allocated state orphaned and the automaton quietly wrong. The
+    # six pinned ANMLZoo families contain none of these, so this only ever fires on a file
+    # that would previously have been mis-parsed.
+    ids = [ste.get("id") for ste in stes]
+    if any(i is None for i in ids):
+        n = sum(1 for i in ids if i is None)
+        raise ValueError(f"{path}: {n} state-transition-element(s) without an 'id' attribute")
+    seen: set[str] = set()
+    duplicates = sorted({i for i in ids if i in seen or seen.add(i)})  # type: ignore[func-returns-value,arg-type]
+    if duplicates:
+        raise ValueError(f"{path}: duplicate state-transition-element ids {duplicates[:5]}")
+
+    symset = {}
+    for ste in stes:
+        raw = ste.get("symbol-set", "*")
+        try:
+            symset[ste.get("id")] = parse_symbol_set(raw)
+        except ValueError as exc:
+            raise ValueError(f"{path}: STE {ste.get('id')!r}: {exc}") from None
 
     # Three synthetic start states encode ANML's two start modes correctly:
     #   q_root (the NFA start) eps-> q_all and q_first.
@@ -149,8 +181,7 @@ def load_anml(path: str | Path) -> NFA:
 
     for ste in stes:
         sid = ste.get("id")
-        if sid is None:
-            continue
+        assert sid is not None  # validated above
         st = ste_state[sid]
         start_attr = (ste.get("start") or "none").lower()
         if start_attr == "all-input":
@@ -160,9 +191,20 @@ def load_anml(path: str | Path) -> NFA:
         for child in ste:
             t = _local(child.tag)
             if t == "activate-on-match":
+                # A target that does not resolve is a *lost edge*, i.e. a different
+                # language, and the previous `if tgt in ste_state` guard dropped it in
+                # silence. ANML also writes the target as "id:port"; the port selects an
+                # input port on the element and the id is what identifies it.
                 tgt = child.get("element")
-                if tgt is not None and tgt in ste_state:
-                    add_edges_into(tgt, st)
+                if tgt is None:
+                    raise ValueError(f"{path}: STE {sid!r}: activate-on-match without 'element'")
+                if tgt not in ste_state and ":" in tgt:
+                    tgt = tgt.split(":", 1)[0]
+                if tgt not in ste_state:
+                    raise ValueError(
+                        f"{path}: STE {sid!r} activates unknown element {child.get('element')!r}"
+                    )
+                add_edges_into(tgt, st)
             elif t == "report-on-match":
                 b.set_accept(st, True)
     return b.build()

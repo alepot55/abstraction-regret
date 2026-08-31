@@ -157,7 +157,7 @@ class WarpMultistreamExecutor:
         return batch_results(out_flags.numpy(), out_lens.numpy(), kernel_ms, transfer_ms)
 
 
-@register(Kind.NFA, Backend.WARP, "multistream")
+@register(Kind.NFA, Backend.WARP, "multistream", default=True)
 def _make(automaton: Automaton, technique: str) -> WarpMultistreamExecutor:
     assert isinstance(automaton, NFA)
     return WarpMultistreamExecutor(automaton, technique)

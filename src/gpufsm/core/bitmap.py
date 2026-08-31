@@ -68,28 +68,53 @@ def _epsilon_closure(active: int, eps_masks: list[int]) -> int:
     return active
 
 
+class BitmapProgram:
+    """An NFA compiled to per-state bitmasks, ready to run over many inputs.
+
+    Building the masks is O(states + transitions) and does not depend on the input, so it
+    belongs with the executor rather than inside the timed loop. ``simulate_bitmap`` used to
+    rebuild them on every call, which meant :func:`gpufsm.api.benchmark` timed the setup on
+    every repeat: at 256 states that was more than the whole simulation. The GPU backends
+    have always done this work once at executor construction; this makes the CPU spec match,
+    so a comparison between them measures the same thing.
+    """
+
+    __slots__ = ("start_closure", "sym_masks", "any_masks", "eps_masks", "accept_mask")
+
+    def __init__(self, nfa: NFA) -> None:
+        self.sym_masks, self.any_masks, self.eps_masks, self.accept_mask = _build_masks(nfa)
+        self.start_closure = _epsilon_closure(1 << nfa.start_state, self.eps_masks)
+
+    def run(self, input_bytes: bytes) -> tuple[bool, int]:
+        """``(accepted, match_len)`` under latch-first-match semantics."""
+        accept_mask, eps_masks = self.accept_mask, self.eps_masks
+        sym_masks, any_masks = self.sym_masks, self.any_masks
+
+        active = self.start_closure
+        if active & accept_mask:
+            return True, 0
+
+        for i, b in enumerate(input_bytes):
+            nxt = 0
+            for s in _iter_bits(active):
+                nxt |= any_masks[s]
+                sm = sym_masks[s]
+                if b in sm:
+                    nxt |= sm[b]
+            if not nxt:
+                break
+            active = _epsilon_closure(nxt, eps_masks)
+            if active & accept_mask:
+                return True, i + 1
+
+        return False, 0
+
+
 def simulate_bitmap(nfa: NFA, input_bytes: bytes) -> tuple[bool, int]:
     """Bit-packed simulation with latch-first-match semantics.
 
     Returns ``(accepted, match_len)`` — identical to :func:`gpufsm.reference.simulate`.
+    Compiles the automaton on every call; for repeated runs build a :class:`BitmapProgram`
+    once instead.
     """
-    sym_masks, any_masks, eps_masks, accept_mask = _build_masks(nfa)
-
-    active = _epsilon_closure(1 << nfa.start_state, eps_masks)
-    if active & accept_mask:
-        return True, 0
-
-    for i, b in enumerate(input_bytes):
-        nxt = 0
-        for s in _iter_bits(active):
-            nxt |= any_masks[s]
-            sm = sym_masks[s]
-            if b in sm:
-                nxt |= sm[b]
-        if not nxt:
-            break
-        active = _epsilon_closure(nxt, eps_masks)
-        if active & accept_mask:
-            return True, i + 1
-
-    return False, 0
+    return BitmapProgram(nfa).run(input_bytes)

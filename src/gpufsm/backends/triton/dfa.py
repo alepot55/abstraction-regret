@@ -83,7 +83,7 @@ class TritonDFAExecutor:
         return batch_results(flags.cpu().numpy(), lens.cpu().numpy(), kernel_ms, transfer_ms)
 
 
-@register(Kind.DFA, Backend.TRITON, "gather")
+@register(Kind.DFA, Backend.TRITON, "gather", default=True)
 def _make(automaton: Automaton, technique: str) -> TritonDFAExecutor:
     assert isinstance(automaton, DFA)
     return TritonDFAExecutor(automaton, technique)

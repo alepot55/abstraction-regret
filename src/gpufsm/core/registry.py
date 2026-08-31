@@ -56,15 +56,31 @@ ExecutorFactory = Callable[[Automaton, str], Executor]
 
 _REGISTRY: dict[tuple[Kind, Backend, str], ExecutorFactory] = {}
 _AVAILABILITY: dict[Backend, Callable[[], bool]] = {}
+_DEFAULTS: dict[tuple[Kind, Backend], str] = {}
 
 
 def register(
-    kind: Kind, backend: Backend, technique: str
+    kind: Kind, backend: Backend, technique: str, default: bool = False
 ) -> Callable[[ExecutorFactory], ExecutorFactory]:
-    """Decorator: register a factory ``(automaton, technique) -> Executor``."""
+    """Decorator: register a factory ``(automaton, technique) -> Executor``.
+
+    ``default=True`` marks the technique ``run(automaton, backend=...)`` uses when the
+    caller names none. Exactly one per (kind, backend). The default used to be whichever
+    module happened to import first, so reordering a tuple of module names for readability
+    silently changed what every default-argument call measured -- in software whose purpose
+    is comparing techniques, that has to be declared rather than emergent.
+    """
 
     def deco(factory: ExecutorFactory) -> ExecutorFactory:
         _REGISTRY[(kind, backend, technique)] = factory
+        if default:
+            previous = _DEFAULTS.get((kind, backend))
+            if previous is not None and previous != technique:
+                raise RuntimeError(
+                    f"two defaults declared for {backend.value}/{kind.value}: "
+                    f"{previous!r} and {technique!r}"
+                )
+            _DEFAULTS[(kind, backend)] = technique
         return factory
 
     return deco
@@ -99,7 +115,13 @@ def get_factory(kind: Kind, backend: Backend, technique: str | None) -> tuple[st
             f"Available backends: {[b.value for b in available_backends()]}"
         )
     if technique is None:
-        technique = techs[0]
+        technique = _DEFAULTS.get((kind, backend))
+        if technique is None:
+            raise KeyError(
+                f"backend {backend.value!r} declares no default {kind.value} technique; "
+                f"name one explicitly (available: {techs}) or mark one with "
+                f"register(..., default=True)"
+            )
     if (kind, backend, technique) not in _REGISTRY:
         raise KeyError(
             f"{kind.value} technique {technique!r} not registered for backend "

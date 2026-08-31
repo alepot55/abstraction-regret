@@ -99,7 +99,7 @@ class WarpDFAExecutor:
         return batch_results(flags.numpy(), lens.numpy(), kernel_ms, transfer_ms)
 
 
-@register(Kind.DFA, Backend.WARP, "gather")
+@register(Kind.DFA, Backend.WARP, "gather", default=True)
 def _make(automaton: Automaton, technique: str) -> WarpDFAExecutor:
     assert isinstance(automaton, DFA)
     return WarpDFAExecutor(automaton, technique)

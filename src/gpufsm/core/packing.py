@@ -38,10 +38,24 @@ def pack_inputs(inputs: list[bytes]) -> tuple[np.ndarray, np.ndarray]:
     ``offsets`` has ``len(inputs) + 1`` entries; string ``i`` occupies
     ``data[offsets[i]:offsets[i + 1]]``. An all-empty batch yields an empty buffer
     rather than tripping ``np.frombuffer`` on a zero-length bytes object.
+
+    Raises ``ValueError`` past 2 GiB of total input. The offsets are int32 because that is
+    what every kernel indexes with; accumulating them *in* int32 wraps to a negative base
+    index silently, which the device then reads out of bounds and reports a wrong verdict
+    for. A batch that large is a mistake either way, and an explicit error names it.
     """
+    total = sum(len(b) for b in inputs)
+    limit = int(np.iinfo(np.int32).max)
+    if total > limit:
+        raise ValueError(
+            f"batch of {total} bytes exceeds the int32 offset range ({limit}); "
+            f"split it into smaller batches"
+        )
     offsets = np.zeros(len(inputs) + 1, dtype=np.int32)
+    running = 0
     for i, b in enumerate(inputs):
-        offsets[i + 1] = offsets[i] + len(b)
+        running += len(b)
+        offsets[i + 1] = running
     if offsets[-1] > 0:
         data = np.frombuffer(b"".join(inputs), dtype=np.uint8).astype(np.int32)
     else:

@@ -85,3 +85,36 @@ def test_unknown_technique_names_the_available_ones():
 def test_techniques_do_not_leak_across_kinds():
     """'bitmap' is an NFA technique; asking for it as a DFA one must not resolve."""
     assert "bitmap" not in list_techniques(Backend.CPU, Kind.DFA)
+
+
+# --- the default technique must be declared, not emergent ---------------------------
+
+
+def test_every_registered_kind_backend_pair_declares_a_default() -> None:
+    """`run(automaton, backend=...)` must resolve to a technique somebody chose.
+
+    Before `register(..., default=True)` existed, `get_factory` took `techs[0]`, i.e. dict
+    insertion order, i.e. whichever module imported first. Reordering a tuple of module
+    names for readability silently changed what every default-argument call measured.
+    """
+    from gpufsm.core.registry import _DEFAULTS, _REGISTRY
+
+    pairs = {(kind, backend) for kind, backend, _ in _REGISTRY}
+    undeclared = sorted((k.value, b.value) for k, b in pairs if (k, b) not in _DEFAULTS)
+    assert not undeclared, f"no default technique declared for: {undeclared}"
+
+
+def test_declared_default_is_actually_registered() -> None:
+    from gpufsm.core.registry import _DEFAULTS, _REGISTRY
+
+    for (kind, backend), technique in _DEFAULTS.items():
+        assert (kind, backend, technique) in _REGISTRY, (
+            f"{backend.value}/{kind.value} declares default {technique!r}, which is not registered"
+        )
+
+
+def test_get_factory_resolves_none_to_the_declared_default() -> None:
+    from gpufsm.core.registry import get_factory
+
+    technique, _ = get_factory(Kind.NFA, Backend.CPU, None)
+    assert technique == "reference"

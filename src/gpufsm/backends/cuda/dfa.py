@@ -47,7 +47,7 @@ class CUDADFAExecutor:
         return batch_results(flags, lens, float(kernel_ms), transfer_ms)
 
 
-@register(Kind.DFA, Backend.CUDA, "gather")
+@register(Kind.DFA, Backend.CUDA, "gather", default=True)
 def _make(automaton: Automaton, technique: str) -> CUDADFAExecutor:
     assert isinstance(automaton, DFA)
     return CUDADFAExecutor(automaton, technique)
