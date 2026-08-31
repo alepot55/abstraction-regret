@@ -89,7 +89,18 @@ calibration scripts skip unsupported `(backend, technique, size)` cells — Trit
 worklists above 64 states, for instance — with a log line rather than failing.
 
 Read [`THREATS.md`](THREATS.md) alongside this table: two of the claims above have open
-confounds that the commands here will reproduce rather than resolve.
+confounds that the commands here will reproduce rather than resolve. One of them has an
+experiment waiting for a GPU:
+
+```bash
+python scripts/dfa_latch_control.py   # does the DFA regret survive a non-latching input?
+```
+
+It measures the three backends at `accept_prob=0.02` (the paper's configuration, where every
+string latches after ~50 of its 1024 bytes and only the thread-SIMT arms exit early) and at
+`accept_prob=0.0` (where nothing latches, so all three walk the same input). If the tile/SPMD
+regret survives the second regime it is real; if it collapses, the DFA half was measuring the
+early exit. It has not been run.
 
 ## What re-running does and does not reproduce
 
