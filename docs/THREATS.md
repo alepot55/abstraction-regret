@@ -86,7 +86,27 @@ cross-architecture argument used to read "the knee moves by ~6x, tracking the 6.
 The two cards' L2 differ by 1.1x (36 vs 40 MB), so the knee shift is real but is not a
 cache-capacity effect, and the paper no longer attributes it to one.
 
-## 3. `multistream_async` is timed on a different clock than its comparators
+## 3. Two drivers were fixed after their CSV was measured — **re-run needed**
+
+Both files below are still the committed evidence, and both were produced by a version of
+their driver that has since been corrected. The drivers in the repository are the fixed ones,
+so re-running them will not reproduce these numbers exactly.
+
+**`regret_multiseed_rtx4070.csv`.** The driver timed 2048 copies of a single periodic
+`"abcdeabcde..."` string, so every lane walked an identical trajectory and branch divergence —
+the mechanism the whole result is about — was zero by construction. It also carried its own
+transcription of the NFA generator instead of using the pinned one. It now uses
+`gpufsm.bench.random_batch` and `random_nfa(n, seed, DENSE)` like every other driver. Whether
+the median regret survives a divergent input is exactly the question the file was meant to
+answer, and it has not been asked yet.
+
+**`scalar_ablation_rtx4070.csv`.** The tile and scalar kernels differ in arithmetic as well as
+in access and control pattern: the scalar one runs 256 serially dependent
+`state = (state * 31 + b) % 1000003` steps, and integer modulo has no hardware instruction on
+NVIDIA GPUs. Part of the 16x cliff is that arithmetic. A third kernel with the same serial loop
+and a cheap recurrence would separate the two; read the cliff as an upper bound until it runs.
+
+## 4. `multistream_async` is timed on a different clock than its comparators
 
 `native/bitpacked.cu:410` documents its return value as "the overlapped end-to-end device
 time" and returns `total_ms`; every other technique returns kernel-only `kernel_ms`. The
@@ -98,7 +118,7 @@ ablation's conclusion is that the memory axes are inert. In the committed cost-m
 gap is about 6% (1.026 vs 0.964 Gbps at n=32). Read the async column as end-to-end, not as
 kernel time.
 
-## 4. Warp is timed with a host clock, the others with CUDA events
+## 5. Warp is timed with a host clock, the others with CUDA events
 
 `backends/warp/_common.py` times a launch with `time.perf_counter()` around
 `wp.synchronize()`; Triton and CUDA use CUDA events. Host launch overhead is therefore inside
@@ -108,7 +128,7 @@ Sized rather than assumed: the Warp points in `sweep_techniques.csv` have median
 of 7.3-28.8 **ms**, so a launch overhead on the order of 10 microseconds is about 0.1% of the
 smallest measurement. This is a real asymmetry in the code and an immaterial one in the data.
 
-## 5. The correctness gate is not in every driver's path
+## 6. The correctness gate is not in every driver's path
 
 `gpufsm.bench.oracle.require` runs before timing in the drivers that call it, and every driver
 in `scripts/` now does. Historically several did not, and two compared two GPU kernels against
@@ -116,14 +136,14 @@ in `scripts/` now does. Historically several did not, and two compared two GPU k
 in the same way. `scripts/oracle_gate.py` is the comprehensive check; `pytest -m gpu` is not,
 because a gpu-marked test whose backend failed to build skips, and a skip counts as a pass.
 
-## 6. Absolute throughput is far from state of the art
+## 7. Absolute throughput is far from state of the art
 
 On real ANMLZoo automata the engine runs at sub-Gbps to a few Gbps. The study measures a ratio
 between DSLs at a fixed algorithm, and the algorithm is deliberately simple so that it can be
 mirrored across four languages. Nothing here should be read as a claim about the fastest way
 to run an automaton on a GPU.
 
-## 7. Four committed CSVs were condensed by hand
+## 8. Four committed CSVs were condensed by hand
 
 The A100 cross-architecture files and the Nsight counters were transcribed from a driver's or
 a profiler's output into a plotting schema. Which ones, and what the hand step did, is in

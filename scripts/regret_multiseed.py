@@ -6,17 +6,23 @@ specific random NFA, not a single-seed artifact. This measures the multistream t
 paper/data/regret_multiseed_rtx4070.csv. (All three backends run at <=64 states; Warp's single-word
 kernel caps there. Warp init may intermittently throw a sticky CUDA-716 -> just rerun.)
 
+Uses the shared harness for both the automata and the inputs, deliberately. It used to build
+its own NFAs and to time 2048 copies of one periodic "abcdeabcde..." string: every lane then
+walked an identical trajectory, so branch divergence -- the mechanism the regret is about --
+was zero by construction, in the one measurement whose job is to show the headline is robust.
+The committed CSV predates this fix and needs re-running; see paper/data/README.md.
+
 Usage:  python scripts/regret_multiseed.py
 """
 
 from __future__ import annotations
 
-import random
 import statistics
 import sys
 from pathlib import Path
 
-from gpufsm import NFABuilder, run_batch
+from gpufsm import run_batch
+from gpufsm.bench import DENSE, random_batch, random_nfa
 from gpufsm.bench.csvio import environment, guard_device, write_rows
 
 SIZES = [32, 48, 64]
@@ -37,15 +43,12 @@ FIELDS = [
 
 
 def _mk(n: int, seed: int):
-    rng = random.Random(seed)
-    b = NFABuilder()
-    for _ in range(n):
-        b.add_state(accept=rng.random() < 0.1)
-    b.set_start(rng.randrange(n))
-    for s in range(n):
-        for _ in range(rng.randint(1, 3)):
-            b.add_transition(s, ord(rng.choice("abcde")), rng.randrange(n))
-    return b.build()
+    """The canonical DENSE family -- the same generator every committed CSV was measured on.
+
+    This file used to carry its own transcription of it, which is exactly the drift
+    ``gpufsm.bench.generators`` exists to prevent.
+    """
+    return random_nfa(n, seed, DENSE)
 
 
 def main() -> int:
@@ -53,7 +56,7 @@ def main() -> int:
     guard_device(out)
     gpu = environment()["gpu"]
 
-    batch = [bytes(b"abcde"[i % 5] for i in range(SLEN)) for _ in range(N_STRINGS)]
+    batch, _total = random_batch(N_STRINGS, SLEN)
     bits = N_STRINGS * SLEN * 8
 
     def gbps(nfa, be, te):

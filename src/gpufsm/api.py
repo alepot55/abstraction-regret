@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from . import backends as _backends  # noqa: F401  (triggers backend registration)
 from .core.registry import Automaton, Backend, Kind, get_factory
-from .core.result import BenchmarkStats, Result
+from .core.result import BenchmarkStats, Result, batch_results
 
 
 def run(
@@ -36,6 +36,13 @@ def run_batch(
     GPU kernels, one program/block per string) handle the whole batch in a single
     launch; everything else falls back to looping :meth:`run`, so every technique
     supports batching transparently.
+
+    **The timing contract is the same on both paths**: ``results[0].kernel_ms`` is the time
+    for the *whole batch* and the rest are zero, which is what every measurement driver
+    reads. The fallback used to leave each result carrying its own per-string time, so
+    ``results[0].kernel_ms`` silently meant "the first string" for looping techniques and
+    "the batch" for batched ones -- the same expression, two different quantities, across
+    the exact comparison this package exists to make.
     """
     backend = Backend(backend)
     technique, factory = get_factory(Kind.of(automaton), backend, technique)
@@ -43,7 +50,16 @@ def run_batch(
     batch = getattr(executor, "run_batch", None)
     if callable(batch):
         return batch(inputs)
-    return [executor.run(b) for b in inputs]
+
+    per_input = [executor.run(b) for b in inputs]
+    if not per_input:
+        return []
+    return batch_results(
+        [r.accepted for r in per_input],
+        [r.match_len for r in per_input],
+        kernel_ms=sum(r.kernel_ms for r in per_input),
+        transfer_ms=sum(r.transfer_ms for r in per_input),
+    )
 
 
 def benchmark(

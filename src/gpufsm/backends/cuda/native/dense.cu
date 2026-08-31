@@ -109,8 +109,8 @@ std::tuple<bool, int, float> run_dense(
     float kernel_ms = 0.0f; cudaEventElapsedTime(&kernel_ms, start, stop);
 
     int h_flag = 0, h_len = 0;
-    cudaMemcpy(&h_flag, d_flag, sizeof(int), cudaMemcpyDeviceToHost);
-    cudaMemcpy(&h_len, d_len, sizeof(int), cudaMemcpyDeviceToHost);
+    CUDA_CHECK(cudaMemcpy(&h_flag, d_flag, sizeof(int), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(&h_len, d_len, sizeof(int), cudaMemcpyDeviceToHost));
     cudaEventDestroy(start); cudaEventDestroy(stop);
 
     return {h_flag != 0, h_len, kernel_ms};

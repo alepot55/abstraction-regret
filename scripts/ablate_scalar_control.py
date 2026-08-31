@@ -6,10 +6,19 @@ scalar recurrence). This isolates that cost cleanly: two Triton kernels process 
 with ONE program per string, differing ONLY in the access/control pattern --
   A (tile):   load the whole string as a tile and do a vectorized reduction (no scalar control)
   B (scalar): a sequential loop with a carried scalar state recurrence (automata-style)
-Everything else is identical (language, data, harness, parallelism), so the A/B throughput cliff
-is the cost the tile model imposes specifically on scalar data-dependent work -- the causal
-control behind the abstraction-regret claim. (CUDA's thread model runs both at similar speed;
-that cross-paradigm half is a separate kernel.) Writes paper/data/scalar_ablation_rtx4070.csv.
+Language, data, harness and parallelism are identical, so the A/B throughput cliff is the cost
+the tile model imposes on scalar data-dependent work -- the causal control behind the
+abstraction-regret claim. (CUDA's thread model runs both at similar speed; that cross-paradigm
+half is a separate kernel.) Writes paper/data/scalar_ablation_rtx4070.csv.
+
+Known confound, stated rather than buried: the two kernels do not differ *only* in the access
+and control pattern. A reduces with `tl.sum((x == 97).to(tl.int32))` over 256 elements while B
+runs 256 serially dependent iterations of `state = (state * 31 + b) % 1000003`. Integer modulo
+has no hardware instruction on NVIDIA GPUs and expands to a multi-instruction sequence, so part
+of the measured cliff is that arithmetic rather than the paradigm. Subtracting it needs a third
+kernel: the same serial 256-iteration loop with a cheap recurrence (`state ^= b`), whose gap to
+A is the arithmetic and whose gap to B is the control pattern. Until that runs, read the cliff
+as an upper bound on the scalar-control cost. See docs/THREATS.md.
 
 Usage:  python scripts/ablate_scalar_control.py
 """

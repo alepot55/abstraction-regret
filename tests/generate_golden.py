@@ -44,6 +44,7 @@ FORMAT_VERSION = 1
 _ALPHABET = "abcd"
 _FUZZ_CASES = 300
 _FUZZ_SEED = 20260816
+_DEEP_CASES = 200
 
 
 def nfa_to_json(nfa: NFA) -> dict[str, Any]:
@@ -105,6 +106,23 @@ def _fuzz_nfa(rng: random.Random, n_states: int) -> NFA:
     return b.build()
 
 
+def _fuzz_nfa_deep(rng: random.Random, n_states: int) -> NFA:
+    """A fuzz NFA whose start configuration does NOT already accept.
+
+    Three quarters of the accepted cases in the original corpus had ``match_len == 0``: the
+    start state (or its epsilon closure) was accepting, so the per-symbol loop never ran and
+    the corpus barely exercised the one thing it exists to pin -- *latch-first-match*, which
+    is a statement about which position the match is reported at. Resampling until the start
+    closure is non-accepting makes every accepted case here consume at least one byte.
+    """
+    for _ in range(64):
+        nfa = _fuzz_nfa(rng, n_states)
+        accepted, match_len = simulate(nfa, b"")
+        if not (accepted and match_len == 0):
+            return nfa
+    return nfa  # pragma: no cover - 64 rejections in a row is not reachable in practice
+
+
 def _fuzz_dfa(rng: random.Random, n_states: int) -> DFA:
     b = DFABuilder()
     for i in range(n_states):
@@ -153,7 +171,25 @@ def build_corpus() -> dict[str, Any]:
             }
         )
 
-    # 3. DFA corpus (the memory-bound face's oracle).
+    # 3. Deep corpus: matches that happen *after* consuming input, which is where
+    #    latch-first-match actually says something. Longer inputs than the fuzz section so a
+    #    first match has room to land somewhere other than position 0 or 1.
+    drng_deep = random.Random(_FUZZ_SEED + 2)
+    for i in range(_DEEP_CASES):
+        nfa = _fuzz_nfa_deep(drng_deep, drng_deep.randint(2, 14))
+        data = bytes(ord(drng_deep.choice(_ALPHABET)) for _ in range(drng_deep.randint(1, 48)))
+        accepted, match_len = simulate(nfa, data)
+        nfa_cases.append(
+            {
+                "id": f"deep:{i}",
+                "nfa": nfa_to_json(nfa),
+                "input_hex": data.hex(),
+                "accepted": accepted,
+                "match_len": match_len,
+            }
+        )
+
+    # 4. DFA corpus (the memory-bound face's oracle).
     dfa_cases: list[dict[str, Any]] = []
     drng = random.Random(_FUZZ_SEED + 1)
     for i in range(12):
@@ -175,8 +211,9 @@ def build_corpus() -> dict[str, Any]:
     return {
         "format_version": FORMAT_VERSION,
         "note": (
-            "Oracle verdicts pinned before the 2026-08-16 refactor. Automata are "
-            "serialized in full so the corpus survives changes to the generators."
+            "Oracle verdicts pinned before the 2026-08-16 refactor, extended with a "
+            "deep section whose matches land after at least one consumed byte. Automata "
+            "are serialized in full so the corpus survives changes to the generators."
         ),
         "nfa_cases": nfa_cases,
         "dfa_cases": dfa_cases,

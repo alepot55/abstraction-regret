@@ -63,8 +63,8 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_dfa(
     py::array_t<int> flags(num_strings);
     py::array_t<int> lens(num_strings);
     if (num_strings > 0) {
-        cudaMemcpy(flags.request().ptr, d_flags, sizeof(int) * num_strings, cudaMemcpyDeviceToHost);
-        cudaMemcpy(lens.request().ptr, d_lens, sizeof(int) * num_strings, cudaMemcpyDeviceToHost);
+        CUDA_CHECK(cudaMemcpy(flags.request().ptr, d_flags, sizeof(int) * num_strings, cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(lens.request().ptr, d_lens, sizeof(int) * num_strings, cudaMemcpyDeviceToHost));
     }
     cudaEventDestroy(start); cudaEventDestroy(stop);
     return {flags, lens, kernel_ms};

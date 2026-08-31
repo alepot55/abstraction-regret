@@ -1,7 +1,13 @@
 """GPU backend correctness — skipped unless a GPU backend is actually available.
 
-On a GPU box these assert that Triton/CUDA reproduce the CPU reference oracle
-(accepted + match_len) on every example and a fuzz of random NFAs.
+On a GPU box these assert that every available GPU backend reproduces the CPU reference
+oracle (accepted + match_len) on every example and a fuzz of random NFAs.
+
+Warp is included. It used to be filtered out of ``_GPU_BACKENDS``, so nothing here ever
+checked ``warp/nfa.py`` against the oracle -- including the ``int(0)`` mutable-local idiom
+that file documents as load-bearing ("a bare literal makes Warp miscompile the later
+conditional reassignments"). Warp is one of the paper's three measured arms; a silent
+miscompile on a new Warp release would have shown up as a changed number, not a red test.
 """
 
 from __future__ import annotations
@@ -15,7 +21,7 @@ from gpufsm.core.registry import Backend as _B
 from gpufsm.core.registry import list_techniques
 from gpufsm.examples import EXAMPLES
 
-_GPU_BACKENDS = [b for b in available_backends() if b in (_B.TRITON, _B.CUDA)]
+_GPU_BACKENDS = [b for b in available_backends() if b in (_B.TRITON, _B.CUDA, _B.WARP)]
 pytestmark = pytest.mark.gpu
 
 skip_no_gpu = pytest.mark.skipif(not _GPU_BACKENDS, reason="no GPU backend available")
