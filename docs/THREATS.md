@@ -1,12 +1,12 @@
 # Threats to validity, as they stand in the code
 
 The paper has a threats section. This file is the version that names files and line numbers,
-including things found by auditing this repository after the paper was written. Anything here
-that is not yet reflected in the paper is marked **open**.
+including things found by auditing this repository after the paper was written. Each item says
+whether the paper reflects it and whether it is resolved.
 
 A reader who wants to attack these results should start here.
 
-## 1. The Triton kernels do not exit the input loop early; CUDA and Warp do — **open**
+## 1. The Triton kernels do not exit the input loop early; CUDA and Warp do — **declared in the paper, not yet resolved**
 
 The fairness protocol is "same algorithm, kernels structurally mirrored, only the DSL varies".
 The loop-exit behaviour is not mirrored:
@@ -35,7 +35,7 @@ strings:
 | 100000 | 1.000 | 54.5 | 1024 |
 
 So CUDA and Warp run about 50 iterations per string and Triton runs 1024, while the reported
-throughput credits all three with the full 1024 bytes. Two consequences, both open:
+throughput credits all three with the full 1024 bytes. Two consequences:
 
 - The DFA regret ratio between CUDA and Triton is inflated by an amount this measurement
   cannot separate from the abstraction cost.
@@ -44,40 +44,47 @@ throughput credits all three with the full 1024 bytes. Two consequences, both op
   by ~974 predicated-off iterations per string" — and the current experiment does not
   distinguish them.
 
-**What would settle it.** Re-measure the DFA face on a non-latching input distribution, the way
-the NFA side already has a `NO_ACCEPT` family (`bench/generators.py`): with `accept_prob=0.0`
-no string matches, all three backends walk the full input, and the trip counts match by
-construction. Alternatively, mirror the loop shape across all three.
+**What would settle it.** `scripts/dfa_latch_control.py` is that experiment: it measures the
+same three backends twice, at `accept_prob=0.02` (the paper's configuration, where everything
+latches) and at `accept_prob=0.0` (where nothing does, so all three walk the same 1024 bytes).
+If the tile/SPMD regret survives the second regime it is real; if it collapses, the DFA half was
+measuring the early exit. **It needs a GPU and has not been run yet.** Alternatively, mirror the
+loop shape across all three backends -- `while pos < n and done == 0` is expressible in Triton,
+and `triton/worklist.py` already uses a data-dependent `while`.
 
 **Where it does not bite.** On the NFA sweep (`random_nfa(n, seed=1000+n)`, 256-byte strings)
 the oracle gives accept rates of 0.01-0.21 and mean symbols consumed of 202-254 out of 256, an
 asymmetry of 1.0-1.3x. The headline NFA regret — the 2x2 that the paper's central claim rests
 on — is not materially affected.
 
-## 2. The RTX 4070's L2 capacity was asserted, not measured — **open**
+## 2. The RTX 4070's L2 capacity was asserted, and the assertion was wrong — **fixed in the paper**
 
 `sweep_dfa.py` used to hardcode `# 6 MB L2 on the RTX 4070` and derive the `fits L2` /
-`exceeds L2` annotation from it. Nothing in the repository ever queried the device. The
-RTX 4070 is AD104, which carries considerably more than 6 MB of L2, and the repository's own
-data is uncomfortable with the small number: `docs/PROFILING.md` reports an L2 hit rate above
-97% on brill, whose CSR is far larger than 6 MB, and describes that as surprising.
+`exceeds L2` annotation from it. Nothing in the repository ever queried the device.
+
+The RTX 4070 is AD104 with **36 MB** of L2. (The AD104 die carries 48 MB; the 4070 SKU enables
+36 and the 4070 SUPER uses all 48.) 6 MB is the Ampere-generation number. The repository's own
+data was already uncomfortable with the small figure: `docs/PROFILING.md` reports an L2 hit rate
+above 97% on brill, whose CSR is far larger than 6 MB, and calls that surprising -- at 36 MB it
+is unremarkable.
 
 What *is* measured is the shape: CUDA peaks at a 6 MB table and declines afterwards
 (364 -> 338 -> 228 -> 176 -> 163 Gbps). The peak is real. Its attribution to L2 capacity is
 the part that was never checked.
 
-The code no longer asserts it. `gpufsm.bench.csvio.environment()` now reads the cache size from
-the device (`l2_mb`), `sweep_dfa.py` derives its annotation from that, and
-`paper/figures.py` marks the *measured* CUDA peak instead of drawing a line at an assumed
-cache size. Settle the number on the machine itself:
+The code no longer asserts it. `gpufsm.bench.csvio.environment()` reads the cache size from the
+device (`l2_mb`), `sweep_dfa.py` derives its annotation from that, and `paper/figures.py` marks
+the *measured* CUDA peak instead of drawing a line at an assumed cache size. Confirm on the
+machine itself:
 
 ```bash
 python -c "import torch; p=torch.cuda.get_device_properties(0); print(p.name, p.L2_cache_size/2**20, 'MB')"
 ```
 
-If the real capacity is much larger than 6 MB, the cross-architecture argument that "the knee
-moves by ~6x, tracking the 6.7x larger L2" needs rewriting: the ratio it depends on is not the
-one that was computed.
+The paper has been corrected accordingly. The consequence worth knowing: its
+cross-architecture argument used to read "the knee moves by ~6x, tracking the 6.7x larger L2".
+The two cards' L2 differ by 1.1x (36 vs 40 MB), so the knee shift is real but is not a
+cache-capacity effect, and the paper no longer attributes it to one.
 
 ## 3. `multistream_async` is timed on a different clock than its comparators
 

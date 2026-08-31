@@ -20,11 +20,11 @@ cost tracks the **column**, not the row.
 | | thread / SIMT | tile / SPMD |
 |---|---|---|
 | **low-level** | CUDA — 1x (baseline) | Gluon — cannot express the kernel |
-| **high-level** | NVIDIA Warp — 0.85x median | Triton — 6-8x |
+| **high-level** | NVIDIA Warp — 0.8-0.9x | Triton — 6-8x |
 
-Warp's figure is the median over five random-NFA seeds (`regret_multiseed_rtx4070.csv`);
-the spread runs 0.78 to 3.34, so on one seed Warp is 3.3x *slower* than CUDA. The single-seed
-sweep gives 0.90x. Quote the median with its spread, not the best point.
+Warp's range is measured throughput, not a model fit: 0.90x on the single-seed sweep and 0.85x
+median over five random-NFA seeds. The spread runs 0.78 to 3.34, so on one seed Warp is 3.3x
+*slower* than CUDA. Quote the median with its spread, not the best point.
 
 Two workloads pin down two faces of the same cause. NFA simulation is control-flow-bound; DFA
 simulation is memory-bound. Triton pays on **both**, which is what rules out "it is the
