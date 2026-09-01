@@ -62,13 +62,6 @@ __global__ void dense_nfa_kernel(
     *out_flag = 0; *out_len = 0;
 }
 
-// Bit-packed technique — the memory-centric thesis artifact.
-// The active state-set is a packed bitmask (1 bit/state, 64-bit words) held in
-// thread-local registers instead of an int8-per-state buffer in (global-backed)
-// local memory. Templating on NWORDS makes the working set a compile-time array:
-// for num_states <= 64 (NWORDS==1) it is a single register-resident
-// `unsigned long long` with zero global traffic for the state vector — exactly the
-// byte->bit + global->register ablation. Same CSR algorithm as the dense kernel.
 
 std::tuple<bool, int, float> run_dense(
     py::array_t<int> sym_row_ptr, py::array_t<int> sym_targets, py::array_t<int> sym_symbols,
@@ -116,4 +109,3 @@ std::tuple<bool, int, float> run_dense(
     return {h_flag != 0, h_len, kernel_ms};
 }
 
-// Launch the bitpacked kernel specialized for the NFA's word count.

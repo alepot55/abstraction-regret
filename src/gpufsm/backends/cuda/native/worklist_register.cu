@@ -120,9 +120,8 @@ __global__ void __launch_bounds__(256, (NWORDS <= 2 ? 6 : 1)) worklist_multistre
     out_flags[i] = out_f; out_lens[i] = out_l;
 }
 
-// Frontier epsilon-closure over a GLOBAL-memory bitset (nwords words). S is the set
-// being closed; F (frontier) and B (new bits) are per-thread scratch slices.
-
+// Dispatch to the NWORDS specialisation of worklist_multistream_kernel. The working set is
+// a compile-time register array, so the word count has to be a template argument.
 static void launch_worklist(
     int nwords, int num_strings,
     const int* srp, const int* st, const int* ss, const int* erp, const int* et,
@@ -198,5 +197,3 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist(
     return {flags, lens, kernel_ms};
 }
 
-// Work-efficient worklist with a GLOBAL working set — no state-count cap. Returns
-// (flags, lens, kernel_ms). accept_words has nwords = ceil(num_states/64) entries.

@@ -350,10 +350,9 @@ __global__ void worklist_shared_kernel(
     if (lane == 0) { out_flags[warp] = out_f; out_lens[warp] = out_l; }
 }
 
-// Multi-stream technique — single->multi-stream ablation axis.
-// One thread per input string (blockIdx.x*blockDim.x+threadIdx.x); strings run
-// concurrently across the SMs. Read-only CSR shared by all threads, in GLOBAL memory.
-
+// Host entry point for worklist_global_kernel: one thread per string, working set in
+// global memory, no state-count cap. (The paragraph that used to sit here described the
+// multi-stream ablation in bitpacked.cu, left behind when the monolith was split.)
 std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist_global(
     py::array_t<int> sym_row_ptr, py::array_t<int> sym_targets, py::array_t<int> sym_symbols,
     py::array_t<int> eps_row_ptr, py::array_t<int> eps_targets,
@@ -609,6 +608,3 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist_shared(
     return {flags, lens, kernel_ms};
 }
 
-// DFA simulation — the MEMORY-bound automata workload. One thread per string walks a
-// dense transition table: cur = trans[cur*256 + symbol] per byte (a random global lookup;
-// for large DFAs the table exceeds cache -> memory-bound). latch-first-match.

@@ -90,8 +90,16 @@ __global__ void bitpacked_nfa_kernel(
     *out_flag = out_f; *out_len = out_l;
 }
 
-// Work-efficient frontier epsilon-closure: expand only NEW states (set bits in
-// `frontier`) into `set`, until no new states appear. O(reachable) not O(n^2).
+// Multi-stream bit-packed kernel: one thread per input string, CSR read from global
+// memory, working set in a register-resident array of NWORDS words. It runs `simulate_one`,
+// whose epsilon closure is the O(n^2) full scan -- num_states passes over num_states states.
+// That is deliberate: this kernel is the *baseline* the work-efficient worklist family is
+// measured against, so it must keep the naive closure.
+//
+// (This spot previously carried a comment describing the frontier closure in
+// worklist_register.cu, left behind when the monolith was split. It claimed O(reachable)
+// rather than O(n^2) -- the exact distinction the multistream-vs-worklist comparison rests
+// on, asserted backwards.)
 
 template <int NWORDS>
 __global__ void bitpacked_multistream_kernel(

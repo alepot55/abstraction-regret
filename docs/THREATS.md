@@ -111,7 +111,44 @@ cross-architecture argument used to read "the knee moves by ~6x, tracking the 6.
 The two cards' L2 differ by 1.1x (36 vs 40 MB), so the knee shift is real but is not a
 cache-capacity effect, and the paper no longer attributes it to one.
 
-## 3. Two drivers were fixed after their CSV was measured — **re-run needed**
+## 3. The Triton arm keeps its working set in global memory, the others in registers — **answered from the committed data**
+
+The sharpest objection available to the headline number, so it is worth having the answer
+ready. In the `multistream` family the working set is not stored the same way in the three
+arms:
+
+| | where the active-set words live | code |
+|---|---|---|
+| CUDA | a fixed-size local array, i.e. registers | `unsigned long long cur[NWORDS]` (`bitpacked.cu:21`) |
+| Warp | a `uint64` kernel local | `warp/nfa.py` |
+| Triton | a **global** tensor, one slice per string | `cur = torch.zeros(n * nwords, ...)` (`multistream.py:154`) |
+
+And Triton is demonstrably *able* to hold a <=64-state set in a register, because its own
+`worklist` kernel does exactly that -- "the working set is one scalar int64, hence the
+64-state ceiling". The headline 2x2 is measured at n=32 and n=64, precisely the range where
+the multistream kernel could have used a scalar and did not. So: is the reported regret partly
+a residency choice rather than a paradigm cost?
+
+**No, and the committed sweep already settles it.** Compare the two Triton kernels against
+their CUDA counterparts at the same sizes (`paper/data/sweep_techniques.csv`):
+
+| n | `multistream` (Triton set in global) | `worklist` (Triton set in a register) |
+|---|---|---|
+| 32 | 6.88x | 6.97x |
+| 64 | 6.25x | 6.51x |
+
+The regret is the same to within noise, and marginally *larger* in the register-resident
+kernel. Moving Triton's working set into a register does not recover the gap, which is what
+the cost model says too: the full-scan kernels are compute-bound, so the memory term the
+residency changes is negligible (`docs/RESULTS_COSTMODEL.md`). The paradigm cost is what is
+being measured.
+
+What remains true is that the arms are not *identical* in residency, and the paper should not
+be read as claiming they are: what is fixed across them is the algorithm, and Triton's
+inability to express a fixed-size register array of `NWORDS` words is one of the things being
+measured, not a confound.
+
+## 4. Two drivers were fixed after their CSV was measured — **re-run needed**
 
 Both files below are still the committed evidence, and both were produced by a version of
 their driver that has since been corrected. The drivers in the repository are the fixed ones,
@@ -134,7 +171,32 @@ in access and control pattern: the scalar one runs 256 serially dependent
 NVIDIA GPUs. Part of the 16x cliff is that arithmetic. A third kernel with the same serial loop
 and a cheap recurrence would separate the two; read the cliff as an upper bound until it runs.
 
-## 4. `multistream_async` is timed on a different clock than its comparators — **open, sized**
+## 5. The shared-memory ablation was swept over the wrong domain — **open**
+
+`worklist_shared`'s guard permits `num_states <= 98304`, but six places in the repository said
+the cap was ~1536 (that is the cap on 64-bit *words*; the error is a factor of 64, and is now
+corrected). The sweep behind `paper/data/worklist_shared_rtx4070.csv` stops at 1536 states,
+where one warp's working set is 768 bytes -- 1.5% of the 48 KB budget.
+
+So the negative result it supports, "moving the working set to shared memory is inert
+(0.99-1.10x)", was measured only where the working set is tiny. The regime where a
+shared-memory working set could plausibly matter -- tens of thousands of states, where the
+per-warp set stops being trivially cache-resident -- was never measured, because the code said
+it was unreachable. Extending the sweep needs a GPU; until then the claim holds for small
+automata and is untested above them.
+
+## 6. `run_batch` rebuilds the executor on every call — **no effect on the published numbers**
+
+`gpufsm.api.run_batch` resolves the factory and constructs a fresh executor per call, so the
+CSR upload and the accept-word packing that the executors do in `__init__` happen again on
+every invocation. Measured: five `run_batch` calls build five executors.
+
+It does not corrupt a reported number -- kernel time is taken with CUDA events around the
+kernel launch, so the re-staging sits outside every `kernel_ms` -- but it does mean that
+"staged once per executor" describes the object's lifetime and not what a measurement loop
+actually does, and that the drivers do more host work than they need to.
+
+## 7. `multistream_async` is timed on a different clock than its comparators — **open, sized**
 
 `native/bitpacked.cu:410` documents its return value as "the overlapped end-to-end device
 time" and returns `total_ms`; every other technique returns kernel-only `kernel_ms`. The
@@ -146,7 +208,7 @@ ablation's conclusion is that the memory axes are inert. In the committed cost-m
 gap is about 6% (1.026 vs 0.964 Gbps at n=32). Read the async column as end-to-end, not as
 kernel time.
 
-## 5. Warp is timed with a host clock, the others with CUDA events — **immaterial, sized**
+## 8. Warp is timed with a host clock, the others with CUDA events — **immaterial, sized**
 
 `backends/warp/_common.py` times a launch with `time.perf_counter()` around
 `wp.synchronize()`; Triton and CUDA use CUDA events. Host launch overhead is therefore inside
@@ -156,7 +218,7 @@ Sized rather than assumed: the Warp points in `sweep_techniques.csv` have median
 of 7.3-28.8 **ms**, so a launch overhead on the order of 10 microseconds is about 0.1% of the
 smallest measurement. This is a real asymmetry in the code and an immaterial one in the data.
 
-## 6. Where the correctness gate runs, and where a green test means nothing — **fixed**
+## 9. Where the correctness gate runs, and where a green test means nothing — **fixed**
 
 `gpufsm.bench.oracle.require` now runs before timing in every driver that reports an automaton
 throughput — including `sweep_techniques.py`, `calibrate_costmodel.py` and `regret_multiseed.py`,
@@ -171,14 +233,14 @@ committed CSV) and `ablate_scalar_control.py` (two raw Triton kernels, no automa
 `scripts/oracle_gate.py` is the comprehensive check; `pytest -m gpu` is not, because a
 gpu-marked test whose backend failed to build skips, and a skip counts as a pass.
 
-## 7. Absolute throughput is far from state of the art — **by design**
+## 10. Absolute throughput is far from state of the art — **by design**
 
 On real ANMLZoo automata the engine runs at sub-Gbps to a few Gbps. The study measures a ratio
 between DSLs at a fixed algorithm, and the algorithm is deliberately simple so that it can be
 mirrored across four languages. Nothing here should be read as a claim about the fastest way
 to run an automaton on a GPU.
 
-## 8. Four committed CSVs were condensed by hand — **documented**
+## 11. Four committed CSVs were condensed by hand — **documented**
 
 The A100 cross-architecture files and the Nsight counters were transcribed from a driver's or
 a profiler's output into a plotting schema. Which ones, and what the hand step did, is in
