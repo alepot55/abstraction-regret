@@ -27,8 +27,10 @@ CMakeFiles/
 data/anmlzoo/
 *.anml
 
-# Measurement output that is not a committed result
-paper/data/cross_arch/
+# Measurement output that is not a committed result. cross_arch/ holds re-runs on rented
+# GPUs; a file there is committed only when a document cites it.
+paper/data/cross_arch/*
+!paper/data/cross_arch/dfa_latch_a100.csv
 *.tmp.csv
 
 # Editors / OS

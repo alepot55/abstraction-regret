@@ -6,7 +6,7 @@ whether the paper reflects it and whether it is resolved.
 
 A reader who wants to attack these results should start here.
 
-## 1. The Triton kernels do not exit the input loop early; CUDA and Warp do — **declared in the paper, not yet resolved**
+## 1. The Triton kernels do not exit the input loop early; CUDA and Warp do — **measured: it accounts for most of the DFA regret**
 
 The fairness protocol is "same algorithm, kernels structurally mirrored, only the DSL varies".
 The loop-exit behaviour is not mirrored:
@@ -44,13 +44,38 @@ throughput credits all three with the full 1024 bytes. Two consequences:
   by ~974 predicated-off iterations per string" — and the current experiment does not
   distinguish them.
 
-**What would settle it.** `scripts/dfa_latch_control.py` is that experiment: it measures the
-same three backends twice, at `accept_prob=0.02` (the paper's configuration, where everything
-latches) and at `accept_prob=0.0` (where nothing does, so all three walk the same 1024 bytes).
-If the tile/SPMD regret survives the second regime it is real; if it collapses, the DFA half was
-measuring the early exit. **It needs a GPU and has not been run yet.** Alternatively, mirror the
-loop shape across all three backends -- `while pos < n and done == 0` is expressible in Triton,
-and `triton/worklist.py` already uses a data-dependent `while`.
+**What it measures.** `scripts/dfa_latch_control.py` runs the same three backends twice, at
+`accept_prob=0.02` (the paper's configuration, where every string latches) and at
+`accept_prob=0.0` (where nothing does, so all three walk the same 1024 bytes). It has now been
+run, on a rented **A100-SXM4-40GB**
+([`../paper/data/cross_arch/dfa_latch_a100.csv`](../paper/data/cross_arch/dfa_latch_a100.csv)):
+
+| DFA table | CUDA/Triton, latching | CUDA/Triton, non-latching |
+|---|---|---|
+| 1 MB | 3.65x | **1.45x** |
+| 4 MB | 3.31x | **1.46x** |
+| 16 MB | 3.15x | **1.36x** |
+| 64 MB | 2.04x | **1.33x** |
+
+Two things follow, and both cut against what the paper says about the DFA face.
+
+**The regret does not vanish, but most of it does.** Once the three arms consume the same
+input, CUDA is 1.3-1.5x faster than Triton rather than 2-3.7x. The tile/SPMD penalty on the
+memory-bound face is real and roughly a factor of 1.4, not a factor of several.
+
+**Triton is not flat.** In the non-latching regime its throughput falls 18.3 -> 17.2 -> 13.0 ->
+7.7 Gbps as the table grows from 1 MB to 64 MB -- a 2.4x decline, tracking CUDA's own 2.6x. So
+it *does* enter the memory-bound regime. The flat line the paper reports is what ~974
+predicated-off iterations per string look like: they cost the same regardless of table size and
+swamp the gather. "Never reaching the memory-bound regime because the scalar gather bottlenecks
+first" is not what this control shows.
+
+**Still to do:** this is an A100 and the paper's DFA numbers are from an RTX 4070, where the
+reported regret is 5-13x rather than the 2-3.7x seen here. The *within-run* comparison between
+the two regimes is the controlled part and is what the table above reports; re-running the same
+control on the 4070 is what would let the paper's own numbers be restated. The structural
+alternative is to mirror the loop shape across all three backends -- `while pos < n and done == 0`
+is expressible in Triton, and `triton/worklist.py` already uses a data-dependent `while`.
 
 **Where it does not bite.** On the NFA sweep (`random_nfa(n, seed=1000+n)`, 256-byte strings)
 the oracle gives accept rates of 0.01-0.21 and mean symbols consumed of 202-254 out of 256, an

@@ -82,12 +82,20 @@ def main() -> int:
     rows: list[dict[str, object]] = []
     print(f"{'n':>4}{'T_regret med[min-max]':>24}{'W_regret med[min-max]':>24}")
     for n in SIZES:
-        tr, wr = [], []
+        tr, wr, skipped = [], [], 0
         for seed in SEEDS:
             nfa = _mk(n, 1000 + seed * 7 + n)
+            if nfa is None:  # degenerate draw: accepts before reading a byte
+                skipped += 1
+                continue
             c = gbps(nfa, "cuda", "multistream")
             tr.append(c / gbps(nfa, "triton", "multistream"))
             wr.append(c / gbps(nfa, "warp", "multistream"))
+        if not tr:
+            print(f"n={n}: every seed drew a degenerate automaton — widen SEEDS")
+            return 1
+        if skipped:
+            print(f"n={n}: skipped {skipped} degenerate seed(s)")
         rows.append(
             {
                 "num_states": n,
@@ -97,7 +105,7 @@ def main() -> int:
                 "warp_regret_med": round(statistics.median(wr), 2),
                 "warp_min": round(min(wr), 2),
                 "warp_max": round(max(wr), 2),
-                "seeds": len(list(SEEDS)),
+                "seeds": len(tr),
                 "gpu": gpu,
             }
         )
