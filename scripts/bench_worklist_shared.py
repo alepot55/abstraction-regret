@@ -17,13 +17,15 @@ from __future__ import annotations
 import random
 import statistics
 import sys
-from pathlib import Path
 
 from gpufsm import run_batch
 from gpufsm.bench import SPARSE_WORKLIST, random_nfa
-from gpufsm.bench.csvio import environment, guard_device, write_rows
+from gpufsm.bench.csvio import driver_out, environment, guard_device, write_rows
 from gpufsm.bench.oracle import require
 from gpufsm.core.nfa import NFA
+
+_SUMMARY = (__doc__ or "").split("\n\n")[0]
+"""First paragraph of the module docstring: the --help description."""
 
 
 def _sparse_nfa(n: int, seed: int) -> tuple[NFA, list[int]]:
@@ -49,7 +51,7 @@ def _median_ms(nfa: NFA, batch: list[bytes], tech: str) -> float:
 
 
 def main() -> int:
-    out = Path("paper/data/worklist_shared_rtx4070.csv")
+    out = driver_out("paper/data/worklist_shared_rtx4070.csv", _SUMMARY)
     guard_device(out)
     gpu = environment()["gpu"]
 

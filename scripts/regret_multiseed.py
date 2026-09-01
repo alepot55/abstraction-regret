@@ -19,14 +19,16 @@ from __future__ import annotations
 
 import statistics
 import sys
-from pathlib import Path
 
 from gpufsm import run_batch
 from gpufsm.bench import DENSE, random_batch, random_nfa
-from gpufsm.bench.csvio import environment, guard_device, write_rows
+from gpufsm.bench.csvio import driver_out, environment, guard_device, write_rows
 from gpufsm.bench.oracle import require
 from gpufsm.core.nfa import NFA
 from gpufsm.reference import simulate
+
+_SUMMARY = (__doc__ or "").split("\n\n")[0]
+"""First paragraph of the module docstring: the --help description."""
 
 SIZES = [32, 48, 64]
 SEEDS = range(5)
@@ -63,7 +65,7 @@ def _mk(n: int, seed: int) -> NFA | None:
 
 
 def main() -> int:
-    out = Path("paper/data/regret_multiseed_rtx4070.csv")
+    out = driver_out("paper/data/regret_multiseed_rtx4070.csv", _SUMMARY)
     guard_device(out)
     gpu = environment()["gpu"]
 

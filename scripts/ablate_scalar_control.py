@@ -27,16 +27,20 @@ from __future__ import annotations
 
 import statistics
 import sys
-from pathlib import Path
 
 import numpy as np
 
-from gpufsm.bench.csvio import environment, guard_device, write_rows
+from gpufsm.bench.csvio import driver_out, environment, guard_device, write_rows
+
+_SUMMARY = (__doc__ or "").split("\n\n")[0]
+"""First paragraph of the module docstring: the --help description."""
 
 FIELDS = ["n_strings", "tile_gbps", "scalar_gbps", "cliff", "gpu"]
 
 
 def main() -> int:
+    # Parse before importing torch: `--help` must work without a GPU stack installed.
+    outp = driver_out("paper/data/scalar_ablation_rtx4070.csv", _SUMMARY)
     try:
         import torch
         import triton
@@ -84,7 +88,6 @@ def main() -> int:
             ts.append(s.elapsed_time(e))
         return statistics.median(ts)
 
-    outp = Path("paper/data/scalar_ablation_rtx4070.csv")
     guard_device(outp)
     gpu = environment()["gpu"]
 

@@ -18,14 +18,15 @@ Requires: gpufsm installed with a working Triton and/or CUDA backend.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from gpufsm.api import run_batch
 from gpufsm.bench import random_batch, random_nfa
-from gpufsm.bench.csvio import environment, guard_device, write_rows
+from gpufsm.bench.csvio import driver_out, environment, guard_device, write_rows
 from gpufsm.bench.oracle import require
 from gpufsm.core.registry import Backend, available_backends, list_techniques
 from gpufsm.costmodel import Measurement, calibrate, relative_error, traffic_per_symbol
+
+_SUMMARY = (__doc__ or "").split("\n\n")[0]
+"""First paragraph of the module docstring: the --help description."""
 
 FIELDS = [
     "backend",
@@ -99,7 +100,7 @@ def _rows(measurements: list[Measurement], gpu: str) -> list[dict[str, object]]:
 
 
 def main() -> int:
-    out = Path("paper/data/costmodel_rtx4070.csv")
+    out = driver_out("paper/data/costmodel_rtx4070.csv", _SUMMARY)
     guard_device(out)
     gpu = environment()["gpu"]
 

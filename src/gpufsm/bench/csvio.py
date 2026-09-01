@@ -8,6 +8,7 @@ environment that produced the numbers is captured alongside them.
 
 from __future__ import annotations
 
+import argparse
 import csv
 import platform
 import sys
@@ -84,6 +85,25 @@ def print_environment(stream: Any = sys.stdout) -> None:
     """Print the environment block measurement scripts put at the top of their output."""
     for key, value in environment().items():
         print(f"{key:9s}: {value}", file=stream)
+
+
+def driver_out(default: str, description: str, argv: list[str] | None = None) -> Path:
+    """Resolve a measurement driver's output path, honouring ``--out``.
+
+    Every driver writes one canonical file and every driver needs a way not to. The
+    :func:`guard_device` message tells the user to "pass an explicit --out"; this is the flag
+    that makes that advice true, and putting it here means all of them spell it the same way.
+
+    Re-measuring on a second GPU is the case it exists for: the committed files carry the
+    reference device in their name, so a run elsewhere must go somewhere else.
+    """
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument(
+        "--out",
+        default=default,
+        help=f"CSV output path (default: {default}); use it when re-measuring on another GPU",
+    )
+    return Path(parser.parse_args(argv).out)
 
 
 class WrongDevice(RuntimeError):

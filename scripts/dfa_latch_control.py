@@ -25,13 +25,15 @@ from __future__ import annotations
 
 import statistics
 import sys
-from pathlib import Path
 
 from gpufsm.api import run_batch
-from gpufsm.bench.csvio import environment, guard_device, write_rows
+from gpufsm.bench.csvio import driver_out, environment, guard_device, write_rows
 from gpufsm.bench.oracle import require
 from gpufsm.core.dfa import random_dfa
 from gpufsm.reference import simulate_dfa
+
+_SUMMARY = (__doc__ or "").split("\n\n")[0]
+"""First paragraph of the module docstring: the --help description."""
 
 STATE_GRID = [1024, 4096, 16384, 65536]
 N_STRINGS = 2048
@@ -81,6 +83,8 @@ def _gbps(dfa, batch: list[bytes], total_bytes: int, backend: str) -> float:
 
 
 def main() -> int:
+    # Parse before probing the device: `--help` must work on a machine without a GPU.
+    out = driver_out("paper/data/dfa_latch_control.csv", _SUMMARY)
     env = environment()
     if env["gpu"] == "(none)":
         print("SKIP: no CUDA device")
@@ -142,7 +146,6 @@ def main() -> int:
         lat, non = ratio("latching", n), ratio("non-latching", n)
         print(f"  n={n:>6}: latching {lat:6.2f}x   non-latching {non:6.2f}x")
 
-    out = Path("paper/data/dfa_latch_control.csv")
     guard_device(out)
     print(f"\nwrote {write_rows(out, rows, FIELDS)} ({len(rows)} rows)")
     return 0
