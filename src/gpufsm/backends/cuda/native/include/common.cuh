@@ -28,6 +28,14 @@ static constexpr int ANY_SYMBOL = 256;
 // Packed working set: 64-bit words, so 8 words covers up to 512 states.
 static constexpr int BITPACKED_MAX_WORDS = 8;
 
+// Wrap every CUDA call whose failure would corrupt a RESULT or a MEASUREMENT. That includes
+// the timing events: `cudaEventElapsedTime` writes nothing on failure, so the usual
+// `float ms = 0.0f; cudaEventElapsedTime(&ms, ...)` leaves a zero that travels downstream as a
+// legitimate reading of zero milliseconds -- in a study whose numbers are kernel times.
+//
+// `cudaEventDestroy` is deliberately NOT wrapped: it runs on the way out, its failure cannot
+// corrupt a value already computed, and throwing from a cleanup path replaces a harmless leak
+// with a lost result.
 #define CUDA_CHECK(call)                                                       \
     do {                                                                      \
         cudaError_t _err = (call);                                           \

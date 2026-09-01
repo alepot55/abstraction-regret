@@ -48,17 +48,17 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_dfa(
     scope.own(d_lens);
 
     cudaEvent_t start, stop;
-    cudaEventCreate(&start); cudaEventCreate(&stop);
-    cudaEventRecord(start);
+    CUDA_CHECK(cudaEventCreate(&start)); CUDA_CHECK(cudaEventCreate(&stop));
+    CUDA_CHECK(cudaEventRecord(start));
     if (num_strings > 0) {
         int threads = 256, blocks = (num_strings + threads - 1) / threads;
         dfa_kernel<<<blocks, threads>>>(d_trans, d_acc, d_in, d_off, num_strings,
                                         num_states, start_state, d_flags, d_lens);
         CUDA_CHECK(cudaGetLastError());
     }
-    cudaEventRecord(stop); cudaEventSynchronize(stop);
+    CUDA_CHECK(cudaEventRecord(stop)); CUDA_CHECK(cudaEventSynchronize(stop));
     CUDA_CHECK(cudaDeviceSynchronize());
-    float kernel_ms = 0.0f; cudaEventElapsedTime(&kernel_ms, start, stop);
+    float kernel_ms = 0.0f; CUDA_CHECK(cudaEventElapsedTime(&kernel_ms, start, stop));
 
     py::array_t<int> flags(num_strings);
     py::array_t<int> lens(num_strings);

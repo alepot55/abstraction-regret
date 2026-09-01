@@ -99,14 +99,14 @@ std::tuple<bool, int, float> run_dense(
     scope.own(d_len);
 
     cudaEvent_t start, stop;
-    cudaEventCreate(&start); cudaEventCreate(&stop);
-    cudaEventRecord(start);
+    CUDA_CHECK(cudaEventCreate(&start)); CUDA_CHECK(cudaEventCreate(&stop));
+    CUDA_CHECK(cudaEventRecord(start));
     dense_nfa_kernel<<<1, 1>>>(d_srp, d_st, d_ss, d_erp, d_et, d_acc, d_in, input_len,
                                num_states, start_state, uses_any, d_cur, d_nxt, d_flag, d_len);
     CUDA_CHECK(cudaGetLastError());
-    cudaEventRecord(stop); cudaEventSynchronize(stop);
+    CUDA_CHECK(cudaEventRecord(stop)); CUDA_CHECK(cudaEventSynchronize(stop));
     CUDA_CHECK(cudaDeviceSynchronize());
-    float kernel_ms = 0.0f; cudaEventElapsedTime(&kernel_ms, start, stop);
+    float kernel_ms = 0.0f; CUDA_CHECK(cudaEventElapsedTime(&kernel_ms, start, stop));
 
     int h_flag = 0, h_len = 0;
     CUDA_CHECK(cudaMemcpy(&h_flag, d_flag, sizeof(int), cudaMemcpyDeviceToHost));

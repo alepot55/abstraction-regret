@@ -389,8 +389,8 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist_global(
     scope.own(d_nb);
 
     cudaEvent_t start, stop;
-    cudaEventCreate(&start); cudaEventCreate(&stop);
-    cudaEventRecord(start);
+    CUDA_CHECK(cudaEventCreate(&start)); CUDA_CHECK(cudaEventCreate(&stop));
+    CUDA_CHECK(cudaEventRecord(start));
     if (num_strings > 0) {
         int threads = 256, blocks = (num_strings + threads - 1) / threads;
         worklist_global_kernel<<<blocks, threads>>>(
@@ -398,9 +398,9 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist_global(
             num_states, start_state, uses_any, nwords, d_cur, d_nxt, d_fr, d_nb, d_flags, d_lens);
         CUDA_CHECK(cudaGetLastError());
     }
-    cudaEventRecord(stop); cudaEventSynchronize(stop);
+    CUDA_CHECK(cudaEventRecord(stop)); CUDA_CHECK(cudaEventSynchronize(stop));
     CUDA_CHECK(cudaDeviceSynchronize());
-    float kernel_ms = 0.0f; cudaEventElapsedTime(&kernel_ms, start, stop);
+    float kernel_ms = 0.0f; CUDA_CHECK(cudaEventElapsedTime(&kernel_ms, start, stop));
 
     py::array_t<int> flags(num_strings);
     py::array_t<int> lens(num_strings);
@@ -451,8 +451,8 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist_warp(
     scope.own(d_nb);
 
     cudaEvent_t start, stop;
-    cudaEventCreate(&start); cudaEventCreate(&stop);
-    cudaEventRecord(start);
+    CUDA_CHECK(cudaEventCreate(&start)); CUDA_CHECK(cudaEventCreate(&stop));
+    CUDA_CHECK(cudaEventRecord(start));
     if (num_strings > 0) {
         int threads = 256;  // 8 warps/block
         int blocks = (num_strings * 32 + threads - 1) / threads;
@@ -461,9 +461,9 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist_warp(
             start_state, uses_any, nwords, d_cur, d_nxt, d_fr, d_nb, d_flags, d_lens);
         CUDA_CHECK(cudaGetLastError());
     }
-    cudaEventRecord(stop); cudaEventSynchronize(stop);
+    CUDA_CHECK(cudaEventRecord(stop)); CUDA_CHECK(cudaEventSynchronize(stop));
     CUDA_CHECK(cudaDeviceSynchronize());
-    float kernel_ms = 0.0f; cudaEventElapsedTime(&kernel_ms, start, stop);
+    float kernel_ms = 0.0f; CUDA_CHECK(cudaEventElapsedTime(&kernel_ms, start, stop));
 
     py::array_t<int> flags(num_strings);
     py::array_t<int> lens(num_strings);
@@ -512,8 +512,8 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist_compact(
     scope.own(d_vis);
 
     cudaEvent_t start, stop;
-    cudaEventCreate(&start); cudaEventCreate(&stop);
-    cudaEventRecord(start);
+    CUDA_CHECK(cudaEventCreate(&start)); CUDA_CHECK(cudaEventCreate(&stop));
+    CUDA_CHECK(cudaEventRecord(start));
     if (num_strings > 0) {
         int threads = 256, blocks = (num_strings + threads - 1) / threads;
         worklist_compact_kernel<<<blocks, threads>>>(
@@ -521,9 +521,9 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist_compact(
             num_states, start_state, uses_any, nwords, d_fa, d_fb, d_vis, d_flags, d_lens);
         CUDA_CHECK(cudaGetLastError());
     }
-    cudaEventRecord(stop); cudaEventSynchronize(stop);
+    CUDA_CHECK(cudaEventRecord(stop)); CUDA_CHECK(cudaEventSynchronize(stop));
     CUDA_CHECK(cudaDeviceSynchronize());
-    float kernel_ms = 0.0f; cudaEventElapsedTime(&kernel_ms, start, stop);
+    float kernel_ms = 0.0f; CUDA_CHECK(cudaEventElapsedTime(&kernel_ms, start, stop));
 
     py::array_t<int> flags(num_strings);
     py::array_t<int> lens(num_strings);
@@ -577,8 +577,8 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist_shared(
     scope.own(d_lens);
 
     cudaEvent_t start, stop;
-    cudaEventCreate(&start); cudaEventCreate(&stop);
-    cudaEventRecord(start);
+    CUDA_CHECK(cudaEventCreate(&start)); CUDA_CHECK(cudaEventCreate(&stop));
+    CUDA_CHECK(cudaEventRecord(start));
     if (num_strings > 0) {
         int blocks = (num_strings + warps_per_block - 1) / warps_per_block;
         worklist_shared_kernel<<<blocks, threads, shared_bytes>>>(
@@ -586,9 +586,9 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist_shared(
             start_state, uses_any, nwords, d_flags, d_lens);
         CUDA_CHECK(cudaGetLastError());
     }
-    cudaEventRecord(stop); cudaEventSynchronize(stop);
+    CUDA_CHECK(cudaEventRecord(stop)); CUDA_CHECK(cudaEventSynchronize(stop));
     CUDA_CHECK(cudaDeviceSynchronize());
-    float kernel_ms = 0.0f; cudaEventElapsedTime(&kernel_ms, start, stop);
+    float kernel_ms = 0.0f; CUDA_CHECK(cudaEventElapsedTime(&kernel_ms, start, stop));
 
     py::array_t<int> flags(num_strings);
     py::array_t<int> lens(num_strings);

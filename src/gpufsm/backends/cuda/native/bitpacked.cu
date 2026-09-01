@@ -205,14 +205,14 @@ std::tuple<bool, int, float> run_bitpacked(
     scope.own(d_len);
 
     cudaEvent_t start, stop;
-    cudaEventCreate(&start); cudaEventCreate(&stop);
-    cudaEventRecord(start);
+    CUDA_CHECK(cudaEventCreate(&start)); CUDA_CHECK(cudaEventCreate(&stop));
+    CUDA_CHECK(cudaEventRecord(start));
     launch_bitpacked(nwords, d_srp, d_st, d_ss, d_erp, d_et, d_acc, d_in, input_len,
                      num_states, start_state, uses_any, d_flag, d_len);
     CUDA_CHECK(cudaGetLastError());
-    cudaEventRecord(stop); cudaEventSynchronize(stop);
+    CUDA_CHECK(cudaEventRecord(stop)); CUDA_CHECK(cudaEventSynchronize(stop));
     CUDA_CHECK(cudaDeviceSynchronize());
-    float kernel_ms = 0.0f; cudaEventElapsedTime(&kernel_ms, start, stop);
+    float kernel_ms = 0.0f; CUDA_CHECK(cudaEventElapsedTime(&kernel_ms, start, stop));
 
     int h_flag = 0, h_len = 0;
     CUDA_CHECK(cudaMemcpy(&h_flag, d_flag, sizeof(int), cudaMemcpyDeviceToHost));
@@ -276,16 +276,16 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_multistream(
     scope.own(d_lens);
 
     cudaEvent_t start, stop;
-    cudaEventCreate(&start); cudaEventCreate(&stop);
-    cudaEventRecord(start);
+    CUDA_CHECK(cudaEventCreate(&start)); CUDA_CHECK(cudaEventCreate(&stop));
+    CUDA_CHECK(cudaEventRecord(start));
     if (num_strings > 0) {
         launch_multistream(nwords, num_strings, d_srp, d_st, d_ss, d_erp, d_et, d_acc, d_in, d_off,
                            num_states, start_state, uses_any, d_flags, d_lens);
         CUDA_CHECK(cudaGetLastError());
     }
-    cudaEventRecord(stop); cudaEventSynchronize(stop);
+    CUDA_CHECK(cudaEventRecord(stop)); CUDA_CHECK(cudaEventSynchronize(stop));
     CUDA_CHECK(cudaDeviceSynchronize());
-    float kernel_ms = 0.0f; cudaEventElapsedTime(&kernel_ms, start, stop);
+    float kernel_ms = 0.0f; CUDA_CHECK(cudaEventElapsedTime(&kernel_ms, start, stop));
 
     py::array_t<int> flags(num_strings);
     py::array_t<int> lens(num_strings);
@@ -379,17 +379,17 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_multistream_shared(
     scope.own(d_lens);
 
     cudaEvent_t start, stop;
-    cudaEventCreate(&start); cudaEventCreate(&stop);
-    cudaEventRecord(start);
+    CUDA_CHECK(cudaEventCreate(&start)); CUDA_CHECK(cudaEventCreate(&stop));
+    CUDA_CHECK(cudaEventRecord(start));
     if (num_strings > 0) {
         launch_multistream_shared(nwords, num_strings, d_srp, d_st, d_ss, d_erp, d_et, d_acc,
                                   d_in, d_off, num_states, start_state, uses_any, nnz_sym, nnz_eps,
                                   shared_bytes, d_flags, d_lens);
         CUDA_CHECK(cudaGetLastError());
     }
-    cudaEventRecord(stop); cudaEventSynchronize(stop);
+    CUDA_CHECK(cudaEventRecord(stop)); CUDA_CHECK(cudaEventSynchronize(stop));
     CUDA_CHECK(cudaDeviceSynchronize());
-    float kernel_ms = 0.0f; cudaEventElapsedTime(&kernel_ms, start, stop);
+    float kernel_ms = 0.0f; CUDA_CHECK(cudaEventElapsedTime(&kernel_ms, start, stop));
 
     py::array_t<int> flags(num_strings);
     py::array_t<int> lens(num_strings);
@@ -465,8 +465,8 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_multistream_async(
     int threads = 256;
 
     cudaEvent_t start, stop;
-    cudaEventCreate(&start); cudaEventCreate(&stop);
-    cudaEventRecord(start);
+    CUDA_CHECK(cudaEventCreate(&start)); CUDA_CHECK(cudaEventCreate(&stop));
+    CUDA_CHECK(cudaEventRecord(start));
     for (int c = 0; c < N_STREAMS; ++c) {
         int lo = c * chunk;
         if (lo >= num_strings) break;
@@ -502,9 +502,9 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_multistream_async(
             cudaMemcpyDeviceToHost, st));
     }
     CUDA_CHECK(cudaGetLastError());
-    cudaEventRecord(stop);
+    CUDA_CHECK(cudaEventRecord(stop));
     CUDA_CHECK(cudaDeviceSynchronize());
-    float total_ms = 0.0f; cudaEventElapsedTime(&total_ms, start, stop);
+    float total_ms = 0.0f; CUDA_CHECK(cudaEventElapsedTime(&total_ms, start, stop));
 
     // h_flags/h_lens ARE the numpy output buffers — async D2H already wrote them.
     for (int s = 0; s < N_STREAMS; ++s) cudaStreamDestroy(streams[s]);
