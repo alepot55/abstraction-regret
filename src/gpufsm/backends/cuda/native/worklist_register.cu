@@ -9,6 +9,10 @@
 
 #include "include/api.hpp"
 
+// Block size for the register worklist. Named because __launch_bounds__ and the launch
+// configuration have to agree, and they sit twenty-four lines apart.
+static constexpr int WORKLIST_BLOCK = 256;
+
 template <int NWORDS>
 __device__ __forceinline__ void eps_closure_worklist(
     unsigned long long set[NWORDS], const int* eps_row_ptr, const int* eps_targets) {
@@ -103,7 +107,10 @@ __device__ __forceinline__ void simulate_one_worklist(
 // so we relax to minBlocks=1 (effectively unconstrained). NWORDS is a compile-time
 // template parameter, so the ternary is a constant expression.
 template <int NWORDS>
-__global__ void __launch_bounds__(256, (NWORDS <= 2 ? 6 : 1)) worklist_multistream_kernel(
+// The first __launch_bounds__ argument is the block size this kernel is compiled for and
+// MUST equal the launch's block size (WORKLIST_BLOCK below). Promising nvcc 256 and then
+// launching something else costs occupancy silently, or fails the launch outright.
+__global__ void __launch_bounds__(WORKLIST_BLOCK, (NWORDS <= 2 ? 6 : 1)) worklist_multistream_kernel(
     const int* sym_row_ptr, const int* sym_targets, const int* sym_symbols,
     const int* eps_row_ptr, const int* eps_targets,
     const unsigned long long* accept_words,
@@ -127,7 +134,7 @@ static void launch_worklist(
     const int* srp, const int* st, const int* ss, const int* erp, const int* et,
     const unsigned long long* acc, const int* in, const int* off,
     int num_states, int start_state, int uses_any, int* flags, int* lens) {
-    int threads = 256;
+    int threads = WORKLIST_BLOCK;
     int blocks = (num_strings + threads - 1) / threads;
 #define LAUNCH_WL(NW) worklist_multistream_kernel<NW><<<blocks, threads>>>( \
         srp, st, ss, erp, et, acc, in, off, num_strings, num_states, start_state, uses_any, flags, lens)

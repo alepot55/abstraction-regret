@@ -81,7 +81,7 @@ def pack_accept(
     one = dtype(1)
     for s in range(nfa.num_states):
         if nfa.accept[s]:
-            words[s >> 6] |= one << dtype(s & 63)
+            words[s // WORD_BITS] |= one << dtype(s % WORD_BITS)
     return words
 
 

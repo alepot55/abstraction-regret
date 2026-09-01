@@ -21,7 +21,7 @@ __global__ void dfa_kernel(
         out_f = 1;
     } else {
         for (int p = 0; p < len; ++p) {
-            cur = trans[cur * 256 + in[p]];
+            cur = trans[cur * DFA_ALPHABET + in[p]];
             if (accept[cur]) { out_f = 1; out_l = p + 1; break; }
         }
     }

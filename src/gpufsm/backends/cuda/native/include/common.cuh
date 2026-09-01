@@ -25,6 +25,11 @@ namespace py = pybind11;
 // Must stay in sync with gpufsm.core.nfa.ANY_SYMBOL.
 static constexpr int ANY_SYMBOL = 256;
 
+// Row stride of the dense DFA transition table: one entry per possible input byte.
+// Must stay in sync with gpufsm.core.dfa.ALPHABET -- the host builds the table with that
+// stride and the kernel indexes it with this one.
+static constexpr int DFA_ALPHABET = 256;
+
 // Packed working set: 64-bit words, so 8 words covers up to 512 states.
 static constexpr int BITPACKED_MAX_WORDS = 8;
 
@@ -91,6 +96,54 @@ public:
     }
 
     std::vector<void*> ptrs;
+};
+
+// Unregisters every host buffer it was given, when it goes out of scope.
+//
+// The async entry point pins the caller's numpy pages with cudaHostRegister and used to
+// unregister them by hand at the end. Fifteen CUDA_CHECK sites sit between the two, and a
+// throw from any of them skipped the unwind -- leaving the driver holding pinned mappings of
+// pages that Python frees as the exception propagates out, for the life of the process. That
+// is a dangling page-locked mapping, not merely a leak.
+class HostRegistration {
+public:
+    HostRegistration() = default;
+    HostRegistration(const HostRegistration&) = delete;
+    HostRegistration& operator=(const HostRegistration&) = delete;
+    ~HostRegistration() {
+        for (void* p : ptrs) cudaHostUnregister(p);
+    }
+
+    // Pin `bytes` at `p` and adopt the registration. A zero-length buffer is skipped.
+    void own(void* p, size_t bytes) {
+        if (!bytes) return;
+        CUDA_CHECK(cudaHostRegister(p, bytes, cudaHostRegisterDefault));
+        ptrs.push_back(p);
+    }
+
+    std::vector<void*> ptrs;
+};
+
+// Destroys every stream it created, when it goes out of scope. Same reason as above: the
+// streams were created before the pipeline and destroyed after it, with throwing calls in
+// between.
+class StreamScope {
+public:
+    StreamScope() = default;
+    StreamScope(const StreamScope&) = delete;
+    StreamScope& operator=(const StreamScope&) = delete;
+    ~StreamScope() {
+        for (cudaStream_t s : streams) cudaStreamDestroy(s);
+    }
+
+    cudaStream_t create() {
+        cudaStream_t s;
+        CUDA_CHECK(cudaStreamCreate(&s));
+        streams.push_back(s);
+        return s;
+    }
+
+    std::vector<cudaStream_t> streams;
 };
 
 // Copies a numpy array to the device; the allocation is owned by `scope`.

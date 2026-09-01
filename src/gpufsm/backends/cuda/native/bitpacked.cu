@@ -449,9 +449,12 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_multistream_async(
     int* h_off = static_cast<int*>(input_offsets.request().ptr);
     int* h_flags = static_cast<int*>(flags.request().ptr);
     int* h_lens = static_cast<int*>(lens.request().ptr);
-    if (in_len) CUDA_CHECK(cudaHostRegister(h_in, sizeof(int) * in_len, cudaHostRegisterDefault));
-    CUDA_CHECK(cudaHostRegister(h_flags, sizeof(int) * num_strings, cudaHostRegisterDefault));
-    CUDA_CHECK(cudaHostRegister(h_lens, sizeof(int) * num_strings, cudaHostRegisterDefault));
+    // Pinned through an RAII holder: a throw anywhere below must not leave the driver
+    // holding page-locked mappings of numpy buffers Python is about to free.
+    HostRegistration pinned;
+    pinned.own(h_in, sizeof(int) * in_len);
+    pinned.own(h_flags, sizeof(int) * num_strings);
+    pinned.own(h_lens, sizeof(int) * num_strings);
 
     int *d_in, *d_off, *d_flags, *d_lens;
     CUDA_CHECK(cudaMalloc(&d_in, sizeof(int) * (in_len ? in_len : 1)));
@@ -463,8 +466,9 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_multistream_async(
     CUDA_CHECK(cudaMalloc(&d_lens, sizeof(int) * num_strings));
     scope.own(d_lens);
 
+    StreamScope stream_scope;
     cudaStream_t streams[N_STREAMS];
-    for (int s = 0; s < N_STREAMS; ++s) CUDA_CHECK(cudaStreamCreate(&streams[s]));
+    for (int s = 0; s < N_STREAMS; ++s) streams[s] = stream_scope.create();
 
     // Offsets are needed device-side; copy once (cheap) before the pipeline.
     CUDA_CHECK(cudaMemcpy(d_off, h_off, sizeof(int) * (num_strings + 1), cudaMemcpyHostToDevice));
@@ -515,9 +519,7 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_multistream_async(
     float total_ms = 0.0f; CUDA_CHECK(cudaEventElapsedTime(&total_ms, start, stop));
 
     // h_flags/h_lens ARE the numpy output buffers — async D2H already wrote them.
-    for (int s = 0; s < N_STREAMS; ++s) cudaStreamDestroy(streams[s]);
-    if (in_len) cudaHostUnregister(h_in);
-    cudaHostUnregister(h_flags); cudaHostUnregister(h_lens);
+    // The streams and the pinned registrations are released by their scope guards.
     cudaEventDestroy(start); cudaEventDestroy(stop);
 
     return {flags, lens, total_ms};

@@ -223,23 +223,25 @@ __device__ __forceinline__ void eps_closure_warp(
     }
 }
 
-__global__ void worklist_warp_kernel(
+// The body shared by worklist_warp_kernel and worklist_shared_kernel. The two differ only in
+// their prologue -- where C/N/F/B point, global slices or dynamic shared memory -- and were
+// 40 byte-identical lines apart before this was factored out. Keeping two copies of a
+// simulation loop is how a semantics fix reaches one arm and not the other.
+//
+// __forceinline__ so the shared-memory variant still resolves its accesses to ld.shared /
+// st.shared: inlining happens before nvcc's address-space inference. Both callers live in
+// this translation unit, which is what makes a __device__ helper legal here at all (the
+// kernels are compiled without relocatable device code).
+__device__ __forceinline__ void simulate_one_warp(
+    unsigned long long* C, unsigned long long* N,
+    unsigned long long* F, unsigned long long* B,
+    int lane, int nwords, int warp,
     const int* sym_row_ptr, const int* sym_targets, const int* sym_symbols,
     const int* eps_row_ptr, const int* eps_targets,
     const unsigned long long* accept_words,
-    const int* input_data, const int* input_offsets, int num_strings,
-    int start_state, int uses_any, int nwords,
-    unsigned long long* cur, unsigned long long* nxt,
-    unsigned long long* frontier, unsigned long long* newb,
+    const int* input_data, const int* input_offsets,
+    int start_state, int uses_any,
     int* out_flags, int* out_lens) {
-    int warp = (blockIdx.x * blockDim.x + threadIdx.x) >> 5;
-    int lane = threadIdx.x & 31;
-    if (warp >= num_strings) return;
-    size_t off = (size_t)warp * nwords;
-    unsigned long long* C = cur + off;
-    unsigned long long* N = nxt + off;
-    unsigned long long* F = frontier + off;
-    unsigned long long* B = newb + off;
     const int* input_symbols = input_data + input_offsets[warp];
     int input_len = input_offsets[warp + 1] - input_offsets[warp];
 
@@ -282,6 +284,31 @@ __global__ void worklist_warp_kernel(
     if (lane == 0) { out_flags[warp] = out_f; out_lens[warp] = out_l; }
 }
 
+
+
+__global__ void worklist_warp_kernel(
+    const int* sym_row_ptr, const int* sym_targets, const int* sym_symbols,
+    const int* eps_row_ptr, const int* eps_targets,
+    const unsigned long long* accept_words,
+    const int* input_data, const int* input_offsets, int num_strings,
+    int start_state, int uses_any, int nwords,
+    unsigned long long* cur, unsigned long long* nxt,
+    unsigned long long* frontier, unsigned long long* newb,
+    int* out_flags, int* out_lens) {
+    int warp = (blockIdx.x * blockDim.x + threadIdx.x) >> 5;
+    int lane = threadIdx.x & 31;
+    if (warp >= num_strings) return;
+    size_t off = (size_t)warp * nwords;
+    unsigned long long* C = cur + off;
+    unsigned long long* N = nxt + off;
+    unsigned long long* F = frontier + off;
+    unsigned long long* B = newb + off;
+    simulate_one_warp(C, N, F, B, lane, nwords, warp,
+                      sym_row_ptr, sym_targets, sym_symbols, eps_row_ptr, eps_targets,
+                      accept_words, input_data, input_offsets, start_state, uses_any,
+                      out_flags, out_lens);
+}
+
 // ---- Shared-memory block-cooperative worklist -------------------------------------
 // Same warp-per-string scheme as worklist_warp, but the per-string working set
 // (cur/nxt/frontier/newb, 4*nwords words) lives in DYNAMIC SHARED memory instead of
@@ -308,46 +335,10 @@ __global__ void worklist_shared_kernel(
     unsigned long long* N = base + nwords;
     unsigned long long* F = base + 2 * nwords;
     unsigned long long* B = base + 3 * nwords;
-    const int* input_symbols = input_data + input_offsets[warp];
-    int input_len = input_offsets[warp + 1] - input_offsets[warp];
-
-    for (int w = lane; w < nwords; w += 32) C[w] = 0ULL;
-    __syncwarp();
-    if (lane == 0) C[word_of(start_state)] |= bit_of(start_state);
-    __syncwarp();
-    eps_closure_warp(C, F, B, nwords, eps_row_ptr, eps_targets, lane);
-
-    int out_f = 0, out_l = 0, done = 0, acc_local = 0;
-    for (int w = lane; w < nwords; w += 32) if (C[w] & accept_words[w]) acc_local = 1;
-    if (__any_sync(0xffffffffu, acc_local)) { out_f = 1; out_l = 0; done = 1; }
-
-    for (int pos = 0; pos < input_len && !done; ++pos) {
-        int sym = input_symbols[pos];
-        for (int w = lane; w < nwords; w += 32) N[w] = 0ULL;
-        __syncwarp();
-        for (int w = lane; w < nwords; w += 32) {
-            unsigned long long b = C[w];
-            while (b) {
-                int s = w * WORD_BITS + __ffsll(b) - 1;
-                b &= b - 1;
-                for (int k = sym_row_ptr[s]; k < sym_row_ptr[s + 1]; ++k) {
-                    int tsym = sym_symbols[k];
-                    if (tsym == sym || (uses_any && tsym == ANY_SYMBOL)) {
-                        int t = sym_targets[k];
-                        atomicOr(&N[word_of(t)], bit_of(t));
-                    }
-                }
-            }
-        }
-        __syncwarp();
-        eps_closure_warp(N, F, B, nwords, eps_row_ptr, eps_targets, lane);
-        for (int w = lane; w < nwords; w += 32) C[w] = N[w];
-        __syncwarp();
-        int m_local = 0;
-        for (int w = lane; w < nwords; w += 32) if (C[w] & accept_words[w]) m_local = 1;
-        if (__any_sync(0xffffffffu, m_local)) { out_f = 1; out_l = pos + 1; done = 1; }
-    }
-    if (lane == 0) { out_flags[warp] = out_f; out_lens[warp] = out_l; }
+    simulate_one_warp(C, N, F, B, lane, nwords, warp,
+                      sym_row_ptr, sym_targets, sym_symbols, eps_row_ptr, eps_targets,
+                      accept_words, input_data, input_offsets, start_state, uses_any,
+                      out_flags, out_lens);
 }
 
 // Host entry point for worklist_global_kernel: one thread per string, working set in
