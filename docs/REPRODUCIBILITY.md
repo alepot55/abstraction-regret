@@ -62,6 +62,13 @@ refuses to overwrite a committed CSV measured on a different GPU
 (`gpufsm.bench.csvio.guard_device`). All of them write through the schema-checked
 `write_rows`, so a renamed column is an error rather than a silently dropped measurement.
 
+Every driver takes `--out`, which is how you re-measure on a different GPU: the committed
+files carry the reference device in their name, so a run elsewhere has to go elsewhere.
+
+```bash
+python scripts/sweep_dfa.py --out paper/data/cross_arch/dfa_regret_a100.csv
+```
+
 Four scripts have no oracle gate, and none of them reports an automaton throughput:
 `gluon_probe.py` is a compile probe, `profile_target.py` issues one launch for `ncu`,
 `validate_costmodel.py` only re-reads a committed CSV, and `ablate_scalar_control.py`

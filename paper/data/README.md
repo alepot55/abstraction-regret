@@ -74,7 +74,7 @@ Both are written up in [`../../docs/THREATS.md`](../../docs/THREATS.md).
 
 No driver can silently overwrite a result measured on another machine: each one calls
 `gpufsm.bench.csvio.guard_device` on its output path first and refuses when the file's
-recorded GPU is not the live one. `run_anmlzoo.py` and `second_gpu.py` go further and derive
+recorded GPU is not the live one, and each takes `--out` so the run has somewhere else to go. `run_anmlzoo.py` and `second_gpu.py` go further and derive
 the filename from the device. Reproducing the *figures* needs no GPU at all:
 
 ```bash
