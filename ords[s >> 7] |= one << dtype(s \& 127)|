@@ -1,0 +1,1 @@
+            = one << dtype(s & 63)|= one << dtype(s & 63)

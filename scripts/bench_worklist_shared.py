@@ -2,7 +2,10 @@
 
 worklist_shared stages the per-string working set (cur/nxt/frontier/newb) in dynamic shared
 memory instead of global; worklist_warp keeps it in global. This isolates the effect of
-working-set *residency/layout* on the work-efficient kernel. Capped at ~1536 states (the
+working-set *residency/layout* on the work-efficient kernel. The sizes below stay small on
+purpose: the hard cap is 98304 states, but one warp's working set grows with num_states and
+occupancy collapses long before that. (An earlier note here said the cap was ~1536 states --
+that is the cap on 64-bit *words*, not on states.) The
 working set must fit 48 KB). Writes paper/data/worklist_shared_rtx4070.csv.
 
 Both techniques are gated against the CPU oracle before anything is timed. Comparing the
@@ -33,7 +36,7 @@ def _sparse_nfa(n: int, seed: int) -> tuple[NFA, list[int]]:
     return random_nfa(n, seed, SPARSE_WORKLIST), [ord(c) for c in SPARSE_WORKLIST.alphabet]
 
 
-SIZES = [256, 512, 1024, 1536]  # all fit 48 KB shared (4*words*8 bytes)
+SIZES = [256, 512, 1024, 1536]  # 4*ceil(n/64)*8 bytes per warp, all far inside 48 KB
 N_STRINGS = 256
 STR_LEN = 256
 WARMUP = 3

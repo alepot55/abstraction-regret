@@ -65,7 +65,11 @@ def test_warp_matches_global_large(n):
 @skip
 @pytest.mark.parametrize("n", [65, 200, 1000, 1536])
 def test_shared_matches_warp(n):
-    """worklist_shared (shared-mem working set, <=1536 states) == worklist_warp."""
+    """worklist_shared (working set in shared memory) == worklist_warp.
+
+    The sizes here are well inside the technique's cap, which is 98304 states rather than
+    the ~1536 an earlier comment claimed -- 1536 is the cap on 64-bit words.
+    """
     rng = random.Random(200 + n)
     nfa, alpha = _random_nfa(n, rng)
     batch = [bytes(ord(rng.choice(alpha)) for _ in range(rng.randint(0, 24))) for _ in range(24)]

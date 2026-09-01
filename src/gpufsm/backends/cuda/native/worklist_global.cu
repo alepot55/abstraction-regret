@@ -7,7 +7,9 @@
 //   global   one thread/string, working set in global memory, no state-count cap
 //   compact  one thread/string, frontier as an active-ID array instead of a bitmap scan
 //   warp     one warp/string, lanes partition the state words, atomicOr into next-set
-//   shared   block-cooperative, working set in dynamic shared memory (~1536 states)
+//   shared   block-cooperative, working set in dynamic shared memory. The hard cap is
+//            98304 states (one warp's 4*nwords*8 bytes must fit 48 KB); well before that,
+//            occupancy collapses to one warp per block, so the useful range is far lower.
 
 #include "include/api.hpp"
 
@@ -550,10 +552,17 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist_shared(
     const size_t SMEM_CAP = 48 * 1024;  // bytes
     size_t per_warp = (size_t)4 * nwords * sizeof(unsigned long long);
     if (per_warp > SMEM_CAP) {
+        // Derive the limit from the same constants the check uses. It used to be spelled
+        // "num_states > ~1536", which is the cap on *nwords*, not on states -- wrong by a
+        // factor of 64, and an error message that names the wrong quantity sends the reader
+        // to change the wrong thing.
+        const size_t max_states = (SMEM_CAP / (4 * sizeof(unsigned long long))) * 64;
         throw std::runtime_error(
-            "worklist_shared: working set (" + std::to_string(per_warp) +
-            " B) exceeds 48 KB shared memory; use worklist_warp/worklist_global for "
-            "num_states > ~1536.");
+            "worklist_shared: one warp's working set (" + std::to_string(per_warp) +
+            " B) exceeds the " + std::to_string(SMEM_CAP / 1024) +
+            " KB shared-memory budget; this technique supports num_states <= " +
+            std::to_string(max_states) +
+            ". Use worklist_warp or worklist_global above that.");
     }
     int warps_per_block = 1;
     while (warps_per_block < 8 && (warps_per_block + 1) * per_warp <= SMEM_CAP) warps_per_block++;

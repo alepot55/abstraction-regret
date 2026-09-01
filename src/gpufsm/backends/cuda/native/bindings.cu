@@ -31,7 +31,8 @@ PYBIND11_MODULE(_cuda, m) {
           "O(nwords) bitmap scan); returns (flags, lens, kernel_ms).");
     m.def("run_worklist_shared", &run_worklist_shared,
           "Shared-memory block-cooperative worklist (working set in dynamic shared mem; "
-          "num_states up to ~1536); returns (flags, lens, kernel_ms).");
+          "num_states up to 98304, though occupancy collapses long before); returns "
+          "(flags, lens, kernel_ms).");
     m.def("run_dfa", &run_dfa,
           "DFA simulation (dense transition-table lookup per byte, memory-bound); "
           "returns (flags, lens, kernel_ms).");

@@ -27,7 +27,7 @@ levenshtein **7** / 2787 (44 words), fermi **269** / 40786 (638 words), brill **
 parallelism** (Nsight: 17→57% occupancy, SM 1→16%), not memory. The speedup is **batch- and
 density-dependent** (`paper/data/worklist_warp{,_batch}_rtx4070.csv`).
 
-### ◐ `worklist_shared` — warp kernel, working set in shared memory (≤1536 states)
+### ◐ `worklist_shared` — warp kernel, working set in shared memory
 **Outcome: inert (0.99–1.10× vs `worklist_warp`).** Nsight explains it: the working set already
 lives in L2 at 99.96% hit, so moving it to shared memory changes nothing. Memory-layout
 privatization does not help once the kernel is work-efficient
