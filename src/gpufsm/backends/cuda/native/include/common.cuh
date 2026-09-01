@@ -28,6 +28,25 @@ static constexpr int ANY_SYMBOL = 256;
 // Packed working set: 64-bit words, so 8 words covers up to 512 states.
 static constexpr int BITPACKED_MAX_WORDS = 8;
 
+// Word geometry of the packed state set. The Python side has named this since
+// `gpufsm.core.packing.WORD_BITS`; the kernels spelled it out as bare `>> 6`, `& 63` and
+// `* 64` in about seventy places, which is the one arithmetic in this file a reader has to
+// re-derive every time. Same numbers, named once.
+static constexpr int WORD_BITS = 64;
+static constexpr int WORD_SHIFT = 6;              // log2(WORD_BITS)
+static constexpr int WORD_MASK = WORD_BITS - 1;
+
+// Which word of the packed set holds `state`, and the bit that selects it inside that word.
+__device__ __host__ __forceinline__ int word_of(int state) { return state >> WORD_SHIFT; }
+__device__ __host__ __forceinline__ unsigned long long bit_of(int state) {
+    return 1ULL << (state & WORD_MASK);
+}
+
+// Words needed to hold `num_states` bits -- the host-side ceil(n/64) written once.
+__host__ __forceinline__ int words_for(int num_states) {
+    return (num_states + WORD_BITS - 1) / WORD_BITS;
+}
+
 // Wrap every CUDA call whose failure would corrupt a RESULT or a MEASUREMENT. That includes
 // the timing events: `cudaEventElapsedTime` writes nothing on failure, so the usual
 // `float ms = 0.0f; cudaEventElapsedTime(&ms, ...)` leaves a zero that travels downstream as a

@@ -23,11 +23,11 @@ __device__ __forceinline__ void eps_closure_global(
         for (int w = 0; w < nwords; ++w) {
             unsigned long long b = F[w];
             while (b) {
-                int s = w * 64 + __ffsll(b) - 1;
+                int s = w * WORD_BITS + __ffsll(b) - 1;
                 b &= b - 1;
                 for (int k = eps_row_ptr[s]; k < eps_row_ptr[s + 1]; ++k) {
                     int t = eps_targets[k];
-                    B[t >> 6] |= (1ULL << (t & 63));
+                    B[word_of(t)] |= bit_of(t);
                 }
             }
         }
@@ -66,7 +66,7 @@ __global__ void worklist_global_kernel(
     int input_len = input_offsets[i + 1] - input_offsets[i];
 
     for (int w = 0; w < nwords; ++w) C[w] = 0ULL;
-    C[start_state >> 6] |= (1ULL << (start_state & 63));
+    C[word_of(start_state)] |= bit_of(start_state);
     eps_closure_global(C, F, B, nwords, eps_row_ptr, eps_targets);
 
     int out_f = 0, out_l = 0, done = 0;
@@ -79,13 +79,13 @@ __global__ void worklist_global_kernel(
         for (int w = 0; w < nwords; ++w) {
             unsigned long long b = C[w];
             while (b) {
-                int s = w * 64 + __ffsll(b) - 1;
+                int s = w * WORD_BITS + __ffsll(b) - 1;
                 b &= b - 1;
                 for (int k = sym_row_ptr[s]; k < sym_row_ptr[s + 1]; ++k) {
                     int tsym = sym_symbols[k];
                     if (tsym == sym || (uses_any && tsym == ANY_SYMBOL)) {
                         int t = sym_targets[k];
-                        N[t >> 6] |= (1ULL << (t & 63));
+                        N[word_of(t)] |= bit_of(t);
                     }
                 }
             }
@@ -116,8 +116,8 @@ __device__ __forceinline__ int eps_closure_compact(
         int s = F[j];
         for (int k = eps_row_ptr[s]; k < eps_row_ptr[s + 1]; ++k) {
             int t = eps_targets[k];
-            if (!((V[t >> 6] >> (t & 63)) & 1ULL)) {
-                V[t >> 6] |= (1ULL << (t & 63));
+            if (!(V[word_of(t)] & bit_of(t))) {
+                V[word_of(t)] |= bit_of(t);
                 F[nf++] = t;
             }
         }
@@ -143,18 +143,18 @@ __global__ void worklist_compact_kernel(
 
     for (int w = 0; w < nwords; ++w) V[w] = 0ULL;  // one-time O(nwords) zero
     int nf = 0;
-    V[start_state >> 6] |= (1ULL << (start_state & 63));
+    V[word_of(start_state)] |= bit_of(start_state);
     FA[nf++] = start_state;
     nf = eps_closure_compact(FA, nf, V, eps_row_ptr, eps_targets);
 
     int out_f = 0, out_l = 0, done = 0;
     for (int j = 0; j < nf && !done; ++j)
-        if ((accept_words[FA[j] >> 6] >> (FA[j] & 63)) & 1ULL) { out_f = 1; out_l = 0; done = 1; }
+        if (accept_words[word_of(FA[j])] & bit_of(FA[j])) { out_f = 1; out_l = 0; done = 1; }
 
     for (int pos = 0; pos < input_len && !done; ++pos) {
         int sym = input_symbols[pos];
         // clear visited bits of the current frontier (O(active)) -> V all-zero
-        for (int j = 0; j < nf; ++j) V[FA[j] >> 6] &= ~(1ULL << (FA[j] & 63));
+        for (int j = 0; j < nf; ++j) V[word_of(FA[j])] &= ~bit_of(FA[j]);
         int nfb = 0;
         for (int j = 0; j < nf; ++j) {
             int s = FA[j];
@@ -162,8 +162,8 @@ __global__ void worklist_compact_kernel(
                 int tsym = sym_symbols[k];
                 if (tsym == sym || (uses_any && tsym == ANY_SYMBOL)) {
                     int t = sym_targets[k];
-                    if (!((V[t >> 6] >> (t & 63)) & 1ULL)) {
-                        V[t >> 6] |= (1ULL << (t & 63));
+                    if (!(V[word_of(t)] & bit_of(t))) {
+                        V[word_of(t)] |= bit_of(t);
                         FB[nfb++] = t;
                     }
                 }
@@ -171,7 +171,7 @@ __global__ void worklist_compact_kernel(
         }
         nfb = eps_closure_compact(FB, nfb, V, eps_row_ptr, eps_targets);
         for (int j = 0; j < nfb; ++j)
-            if ((accept_words[FB[j] >> 6] >> (FB[j] & 63)) & 1ULL) {
+            if (accept_words[word_of(FB[j])] & bit_of(FB[j])) {
                 out_f = 1; out_l = pos + 1; done = 1; break;
             }
         int* tmp = FA; FA = FB; FB = tmp;  // swap frontiers
@@ -202,11 +202,11 @@ __device__ __forceinline__ void eps_closure_warp(
         for (int w = lane; w < nwords; w += 32) {
             unsigned long long b = F[w];
             while (b) {
-                int s = w * 64 + __ffsll(b) - 1;
+                int s = w * WORD_BITS + __ffsll(b) - 1;
                 b &= b - 1;
                 for (int k = eps_row_ptr[s]; k < eps_row_ptr[s + 1]; ++k) {
                     int t = eps_targets[k];
-                    atomicOr(&B[t >> 6], (1ULL << (t & 63)));
+                    atomicOr(&B[word_of(t)], bit_of(t));
                 }
             }
         }
@@ -245,7 +245,7 @@ __global__ void worklist_warp_kernel(
 
     for (int w = lane; w < nwords; w += 32) C[w] = 0ULL;
     __syncwarp();
-    if (lane == 0) C[start_state >> 6] |= (1ULL << (start_state & 63));
+    if (lane == 0) C[word_of(start_state)] |= bit_of(start_state);
     __syncwarp();
     eps_closure_warp(C, F, B, nwords, eps_row_ptr, eps_targets, lane);
 
@@ -260,13 +260,13 @@ __global__ void worklist_warp_kernel(
         for (int w = lane; w < nwords; w += 32) {
             unsigned long long b = C[w];
             while (b) {
-                int s = w * 64 + __ffsll(b) - 1;
+                int s = w * WORD_BITS + __ffsll(b) - 1;
                 b &= b - 1;
                 for (int k = sym_row_ptr[s]; k < sym_row_ptr[s + 1]; ++k) {
                     int tsym = sym_symbols[k];
                     if (tsym == sym || (uses_any && tsym == ANY_SYMBOL)) {
                         int t = sym_targets[k];
-                        atomicOr(&N[t >> 6], (1ULL << (t & 63)));
+                        atomicOr(&N[word_of(t)], bit_of(t));
                     }
                 }
             }
@@ -313,7 +313,7 @@ __global__ void worklist_shared_kernel(
 
     for (int w = lane; w < nwords; w += 32) C[w] = 0ULL;
     __syncwarp();
-    if (lane == 0) C[start_state >> 6] |= (1ULL << (start_state & 63));
+    if (lane == 0) C[word_of(start_state)] |= bit_of(start_state);
     __syncwarp();
     eps_closure_warp(C, F, B, nwords, eps_row_ptr, eps_targets, lane);
 
@@ -328,13 +328,13 @@ __global__ void worklist_shared_kernel(
         for (int w = lane; w < nwords; w += 32) {
             unsigned long long b = C[w];
             while (b) {
-                int s = w * 64 + __ffsll(b) - 1;
+                int s = w * WORD_BITS + __ffsll(b) - 1;
                 b &= b - 1;
                 for (int k = sym_row_ptr[s]; k < sym_row_ptr[s + 1]; ++k) {
                     int tsym = sym_symbols[k];
                     if (tsym == sym || (uses_any && tsym == ANY_SYMBOL)) {
                         int t = sym_targets[k];
-                        atomicOr(&N[t >> 6], (1ULL << (t & 63)));
+                        atomicOr(&N[word_of(t)], bit_of(t));
                     }
                 }
             }
@@ -360,7 +360,7 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist_global(
     py::array_t<int> input_data, py::array_t<int> input_offsets,
     int num_states, int start_state, int uses_any) {
 
-    int nwords = (num_states + 63) / 64;
+    int nwords = words_for(num_states);
     int num_strings = static_cast<int>(input_offsets.request().size) - 1;
 
     DeviceScope scope;
@@ -422,7 +422,7 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist_warp(
     py::array_t<int> input_data, py::array_t<int> input_offsets,
     int num_states, int start_state, int uses_any) {
 
-    int nwords = (num_states + 63) / 64;
+    int nwords = words_for(num_states);
     int num_strings = static_cast<int>(input_offsets.request().size) - 1;
 
     DeviceScope scope;
@@ -485,7 +485,7 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist_compact(
     py::array_t<int> input_data, py::array_t<int> input_offsets,
     int num_states, int start_state, int uses_any) {
 
-    int nwords = (num_states + 63) / 64;
+    int nwords = words_for(num_states);
     int num_strings = static_cast<int>(input_offsets.request().size) - 1;
 
     DeviceScope scope;
@@ -546,7 +546,7 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist_shared(
     py::array_t<int> input_data, py::array_t<int> input_offsets,
     int num_states, int start_state, int uses_any) {
 
-    int nwords = (num_states + 63) / 64;
+    int nwords = words_for(num_states);
     int num_strings = static_cast<int>(input_offsets.request().size) - 1;
     const size_t SMEM_CAP = 48 * 1024;  // bytes
     size_t per_warp = (size_t)4 * nwords * sizeof(unsigned long long);

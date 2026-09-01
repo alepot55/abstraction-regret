@@ -22,15 +22,15 @@ __device__ __forceinline__ void simulate_one(
     unsigned long long nxt[NWORDS];
 #pragma unroll
     for (int w = 0; w < NWORDS; ++w) cur[w] = 0ULL;
-    cur[start_state >> 6] |= (1ULL << (start_state & 63));
+    cur[word_of(start_state)] |= bit_of(start_state);
 
     // Epsilon closure: num_states passes guarantee convergence.
     for (int it = 0; it < num_states; ++it) {
         for (int s = 0; s < num_states; ++s) {
-            if (cur[s >> 6] & (1ULL << (s & 63))) {
+            if (cur[word_of(s)] & bit_of(s)) {
                 for (int k = eps_row_ptr[s]; k < eps_row_ptr[s + 1]; ++k) {
                     int t = eps_targets[k];
-                    cur[t >> 6] |= (1ULL << (t & 63));
+                    cur[word_of(t)] |= bit_of(t);
                 }
             }
         }
@@ -46,22 +46,22 @@ __device__ __forceinline__ void simulate_one(
 #pragma unroll
         for (int w = 0; w < NWORDS; ++w) nxt[w] = 0ULL;
         for (int s = 0; s < num_states; ++s) {
-            if (cur[s >> 6] & (1ULL << (s & 63))) {
+            if (cur[word_of(s)] & bit_of(s)) {
                 for (int k = sym_row_ptr[s]; k < sym_row_ptr[s + 1]; ++k) {
                     int tsym = sym_symbols[k];
                     if (tsym == sym || (uses_any && tsym == ANY_SYMBOL)) {
                         int t = sym_targets[k];
-                        nxt[t >> 6] |= (1ULL << (t & 63));
+                        nxt[word_of(t)] |= bit_of(t);
                     }
                 }
             }
         }
         for (int it = 0; it < num_states; ++it) {
             for (int s = 0; s < num_states; ++s) {
-                if (nxt[s >> 6] & (1ULL << (s & 63))) {
+                if (nxt[word_of(s)] & bit_of(s)) {
                     for (int k = eps_row_ptr[s]; k < eps_row_ptr[s + 1]; ++k) {
                         int t = eps_targets[k];
-                        nxt[t >> 6] |= (1ULL << (t & 63));
+                        nxt[word_of(t)] |= bit_of(t);
                     }
                 }
             }
@@ -195,7 +195,7 @@ std::tuple<bool, int, float> run_bitpacked(
     py::array_t<int> input_symbols,
     int num_states, int start_state, int uses_any) {
 
-    int nwords = (num_states + 63) / 64;
+    int nwords = words_for(num_states);
     DeviceScope scope;
     const int* d_srp = dev_copy(sym_row_ptr, scope);
     const int* d_st = dev_copy(sym_targets, scope);
@@ -264,7 +264,7 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_multistream(
     py::array_t<int> input_data, py::array_t<int> input_offsets,
     int num_states, int start_state, int uses_any) {
 
-    int nwords = (num_states + 63) / 64;
+    int nwords = words_for(num_states);
     int num_strings = static_cast<int>(input_offsets.request().size) - 1;
 
     DeviceScope scope;
@@ -357,7 +357,7 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_multistream_shared(
     py::array_t<int> input_data, py::array_t<int> input_offsets,
     int num_states, int start_state, int uses_any) {
 
-    int nwords = (num_states + 63) / 64;
+    int nwords = words_for(num_states);
     int num_strings = static_cast<int>(input_offsets.request().size) - 1;
     int nnz_sym = static_cast<int>(sym_targets.request().size);
     int nnz_eps = static_cast<int>(eps_targets.request().size);
@@ -425,7 +425,7 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_multistream_async(
     int num_states, int start_state, int uses_any) {
 
     constexpr int N_STREAMS = 4;
-    int nwords = (num_states + 63) / 64;
+    int nwords = words_for(num_states);
     int num_strings = static_cast<int>(input_offsets.request().size) - 1;
     int in_len = static_cast<int>(input_data.request().size);
 

@@ -23,11 +23,11 @@ __device__ __forceinline__ void eps_closure_worklist(
         for (int w = 0; w < NWORDS; ++w) {
             unsigned long long b = frontier[w];
             while (b) {
-                int s = w * 64 + __ffsll(b) - 1;
+                int s = w * WORD_BITS + __ffsll(b) - 1;
                 b &= b - 1;
                 for (int k = eps_row_ptr[s]; k < eps_row_ptr[s + 1]; ++k) {
                     int t = eps_targets[k];
-                    nb[t >> 6] |= (1ULL << (t & 63));
+                    nb[word_of(t)] |= bit_of(t);
                 }
             }
         }
@@ -59,7 +59,7 @@ __device__ __forceinline__ void simulate_one_worklist(
     unsigned long long cur[NWORDS];
 #pragma unroll
     for (int w = 0; w < NWORDS; ++w) cur[w] = 0ULL;
-    cur[start_state >> 6] |= (1ULL << (start_state & 63));
+    cur[word_of(start_state)] |= bit_of(start_state);
     eps_closure_worklist<NWORDS>(cur, eps_row_ptr, eps_targets);
 
     out_f = 0; out_l = 0; int done = 0;
@@ -75,13 +75,13 @@ __device__ __forceinline__ void simulate_one_worklist(
         for (int w = 0; w < NWORDS; ++w) {
             unsigned long long b = cur[w];
             while (b) {
-                int s = w * 64 + __ffsll(b) - 1;
+                int s = w * WORD_BITS + __ffsll(b) - 1;
                 b &= b - 1;
                 for (int k = sym_row_ptr[s]; k < sym_row_ptr[s + 1]; ++k) {
                     int tsym = sym_symbols[k];
                     if (tsym == sym || (uses_any && tsym == ANY_SYMBOL)) {
                         int t = sym_targets[k];
-                        nxt[t >> 6] |= (1ULL << (t & 63));
+                        nxt[word_of(t)] |= bit_of(t);
                     }
                 }
             }
@@ -156,7 +156,7 @@ std::tuple<py::array_t<int>, py::array_t<int>, float> run_worklist(
     py::array_t<int> input_data, py::array_t<int> input_offsets,
     int num_states, int start_state, int uses_any) {
 
-    int nwords = (num_states + 63) / 64;
+    int nwords = words_for(num_states);
     int num_strings = static_cast<int>(input_offsets.request().size) - 1;
 
     DeviceScope scope;
