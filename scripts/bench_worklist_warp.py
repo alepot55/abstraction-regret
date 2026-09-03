@@ -12,11 +12,12 @@ Correctness is gated on the CPU oracle before any timing (both kernels validated
 in the test-suite). Writes paper/data/worklist_warp_rtx4070.csv (saturating-batch, per automaton)
 and paper/data/worklist_warp_batch_rtx4070.csv (batch sensitivity).
 
-Usage:  python scripts/bench_worklist_warp.py
+Usage:  python scripts/bench_worklist_warp.py [--out CSV] [--out-batch CSV]
 """
 
 from __future__ import annotations
 
+import argparse
 import random
 import statistics
 import sys
@@ -77,8 +78,13 @@ def _speedup(nfa: NFA, batch: list[bytes]) -> tuple[float, float, None]:
 
 
 def main() -> int:
-    out = Path("paper/data/worklist_warp_rtx4070.csv")
-    outb = Path("paper/data/worklist_warp_batch_rtx4070.csv")
+    # This is the one driver that writes two files, so it cannot use `driver_out`; the
+    # first flag is spelled the same way on purpose.
+    parser = argparse.ArgumentParser(description=__doc__ or "")
+    parser.add_argument("--out", default="paper/data/worklist_warp_rtx4070.csv")
+    parser.add_argument("--out-batch", default="paper/data/worklist_warp_batch_rtx4070.csv")
+    args = parser.parse_args()
+    out, outb = Path(args.out), Path(args.out_batch)
     guard_device(out)
     guard_device(outb)
     gpu = environment()["gpu"]
@@ -111,7 +117,18 @@ def main() -> int:
         nfa, alpha = _sparse_nfa(n, seed=n)
         batch = [bytes(rng.choice(alpha) for _ in range(STR_LEN)) for _ in range(SAT_STRINGS)]
         g, w, _ = _speedup(nfa, batch)
-        rows.append(("synthetic", n, (n + 63) // 64, round(g, 4), round(w, 4), round(w / g, 1)))
+        rows.append(
+            {
+                "automaton": "synthetic",
+                "num_states": n,
+                "words": (n + 63) // 64,
+                "n_strings": SAT_STRINGS,
+                "global_gbps": round(g, 4),
+                "warp_gbps": round(w, 4),
+                "speedup": round(w / g, 1),
+                "gpu": gpu,
+            }
+        )
         print(f"  synthetic n={n:6d}: global={g:8.4f} warp={w:8.4f} speedup={w / g:6.1f}x")
 
     try:

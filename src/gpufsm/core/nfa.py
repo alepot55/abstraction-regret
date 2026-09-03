@@ -40,9 +40,18 @@ def _coerce_symbol(symbol: int | str) -> int:
     raise ValueError(f"symbol must be 0..255 or ANY_SYMBOL, got {symbol}")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class NFA:
-    """Immutable NFA in CSR form. Build one via :class:`NFABuilder`."""
+    """Immutable NFA in CSR form. Build one via :class:`NFABuilder`.
+
+    ``eq=False`` is deliberate. The generated ``__eq__`` compares the numpy fields with
+    ``==``, which yields an array, so ``a == b`` raised ``ValueError: truth value of an
+    array ... is ambiguous`` on two identical automata; and ``frozen=True`` then
+    synthesised a ``__hash__`` over those same unhashable arrays. Falling back to identity
+    makes the type usable as a dict key and comparable without lying. ``frozen`` still
+    states the intent -- the arrays are shared with every backend and must not be mutated --
+    but it cannot enforce it on their contents.
+    """
 
     num_states: int
     start_state: int

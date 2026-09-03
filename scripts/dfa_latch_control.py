@@ -84,7 +84,10 @@ def _gbps(dfa, batch: list[bytes], total_bytes: int, backend: str) -> float:
 
 def main() -> int:
     # Parse before probing the device: `--help` must work on a machine without a GPU.
-    out = driver_out("paper/data/dfa_latch_control.csv", _SUMMARY)
+    out = driver_out("paper/data/cross_arch/dfa_latch_a100.csv", _SUMMARY)
+    # Before the measurement, not after it: refusing at the end costs a full sweep of GPU
+    # time to learn something that was knowable from the file header.
+    guard_device(out)
     env = environment()
     if env["gpu"] == "(none)":
         print("SKIP: no CUDA device")
@@ -146,7 +149,6 @@ def main() -> int:
         lat, non = ratio("latching", n), ratio("non-latching", n)
         print(f"  n={n:>6}: latching {lat:6.2f}x   non-latching {non:6.2f}x")
 
-    guard_device(out)
     print(f"\nwrote {write_rows(out, rows, FIELDS)} ({len(rows)} rows)")
     return 0
 

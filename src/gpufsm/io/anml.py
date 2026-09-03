@@ -1,4 +1,4 @@
-"""ANML (Automata Network Markup Language) loading + a minimal exporter.
+"""ANML (Automata Network Markup Language) loading.
 
 ANML is Micron's XML format for *homogeneous* automata: the matching symbol-set
 lives on the state-transition-element (STE), not on the edge. ``activate-on-match``
@@ -19,9 +19,9 @@ Supported symbol-set forms: bracketed classes ``[...]`` with byte ranges
 ``[^...]`` over 0..255; a bare ``*`` means "any byte" (:data:`gpufsm.nfa.ANY_SYMBOL`).
 Unsupported constructs raise rather than silently mis-parsing.
 
-This is a well-defined subset validated by a hand-built fixture and an
-NFA->ANML->NFA round-trip (see tests). The large ANMLZoo/AutomataZoo suite still
-needs its data fetched with a pinned checksum (see :mod:`gpufsm.io.datasets`).
+This is a well-defined subset, validated by hand-built fixtures in ``tests/test_anml.py``
+and by loading the six pinned ANMLZoo families. The suite's data is fetched on demand
+with a pinned checksum (see :mod:`gpufsm.io.datasets`).
 """
 
 from __future__ import annotations

@@ -50,14 +50,14 @@ throughput credits all three with the full 1024 bytes. Two consequences:
 run, on a rented **A100-SXM4-40GB**
 ([`../paper/data/cross_arch/dfa_latch_a100.csv`](../paper/data/cross_arch/dfa_latch_a100.csv)):
 
-| DFA table | CUDA/Triton, latching | CUDA/Triton, non-latching |
-|---|---|---|
-| 1 MB | 3.65x | **1.45x** |
-| 4 MB | 3.31x | **1.46x** |
-| 16 MB | 3.15x | **1.36x** |
-| 64 MB | 2.04x | **1.33x** |
+| DFA table | CUDA/Triton, latching | CUDA/Triton, non-latching | Warp/Triton, latching | Warp/Triton, non-latching |
+|---|---|---|---|---|
+| 1 MB | 3.65x | **1.45x** | 1.78x | **1.12x** |
+| 4 MB | 3.31x | **1.46x** | 1.59x | **1.00x** |
+| 16 MB | 3.15x | **1.36x** | 1.56x | **0.95x** |
+| 64 MB | 2.04x | **1.33x** | 1.25x | **1.13x** |
 
-Two things follow, and both cut against what the paper says about the DFA face.
+Three things follow, and all three cut against what the paper says about the DFA face.
 
 **The regret does not vanish, but most of it does.** Once the three arms consume the same
 input, CUDA is 1.3-1.5x faster than Triton rather than 2-3.7x. The tile/SPMD penalty on the
@@ -69,6 +69,17 @@ it *does* enter the memory-bound regime. The flat line the paper reports is what
 predicated-off iterations per string look like: they cost the same regardless of table size and
 swamp the gather. "Never reaching the memory-bound regime because the scalar gather bottlenecks
 first" is not what this control shows.
+
+**The tile-versus-thread contrast does not survive at all on this face.** The Warp column is
+the one that has to be said out loud, because it is in the same committed file. Once the arms
+consume the same input, Warp and Triton are level -- 1.12x, 1.00x, 0.95x, 1.13x, with Triton
+5% *ahead* at 16 MB -- while CUDA/Warp over the same four points is 1.30x, 1.46x, 1.44x, 1.18x.
+CUDA beats the tile DSL and the thread-model DSL by almost exactly the same margin. So the
+residual 1.3-1.5x is not a paradigm cost: it is an advantage of hand-written CUDA that neither
+Python DSL shares. The two-faced structure of the argument -- a DSL that pays on one face might
+be the workload, one that pays on both pays for its execution model -- loses the second face as
+evidence about paradigm. What still carries it: the NFA face (6-8x, unchanged and reproduced in
+direction on an A100), the Gluon expressibility control, and the intra-Triton scalar ablation.
 
 **Still to do:** this is an A100 and the paper's DFA numbers are from an RTX 4070, where the
 reported regret is 5-13x rather than the 2-3.7x seen here. The *within-run* comparison between
@@ -198,7 +209,7 @@ actually does, and that the drivers do more host work than they need to.
 
 ## 7. `multistream_async` is timed on a different clock than its comparators — **open, sized**
 
-`native/bitpacked.cu:410` documents its return value as "the overlapped end-to-end device
+`native/bitpacked.cu:418-419` documents its return value as "the overlapped end-to-end device
 time" and returns `total_ms`; every other technique returns kernel-only `kernel_ms`. The
 Python wrapper (`backends/cuda/nfa.py`) stores whichever it gets into `Result.kernel_ms`, and
 the memory-ablation figure then plots the async point against kernel-only points.

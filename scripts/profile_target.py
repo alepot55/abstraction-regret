@@ -29,7 +29,7 @@ def main() -> None:
 
         nfa = load_anml(ensure(DATASETS[spec.split(":", 1)[1]], "data/anmlzoo"))
     else:
-        nfa = random_nfa(int(spec))
+        nfa = random_nfa(int(spec), seed=0)
     alpha = sorted({int(s) for s in nfa.sym_symbols if 0 <= int(s) <= 255}) or [ord("a")]
     rng = np.random.default_rng(0)
     flat = bytes(rng.choice(alpha, size=n_strings * slen).astype(np.uint8))

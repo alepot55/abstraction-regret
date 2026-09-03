@@ -8,19 +8,16 @@ Captures GPU + library versions for reproducibility. Output feeds the paper figu
 The single-program dense/bitpacked kernels are excluded: they are one latency-bound
 GPU thread (~0 throughput) and are reported separately as the naive baseline.
 
-Run on a GPU box:  python scripts/sweep_techniques.py [out.csv]
+Run on a GPU box:  python scripts/sweep_techniques.py [--out CSV]
 """
 
 from __future__ import annotations
-
-import sys
-from pathlib import Path
 
 import numpy as np
 
 from gpufsm.api import run_batch
 from gpufsm.bench import random_batch, random_nfa
-from gpufsm.bench.csvio import guard_device, write_rows
+from gpufsm.bench.csvio import driver_out, guard_device, write_rows
 from gpufsm.bench.oracle import require
 from gpufsm.bench.timing import bootstrap_ci95
 from gpufsm.core.registry import Backend, available_backends, list_techniques
@@ -102,7 +99,7 @@ def measure(nfa, backend, technique, batch, total_bytes) -> dict | None:
 
 
 def main() -> int:
-    out_path = Path(sys.argv[1] if len(sys.argv) > 1 else "paper/data/sweep_techniques.csv")
+    out_path = driver_out("paper/data/sweep_techniques.csv", __doc__ or "")
     guard_device(out_path)
     env = env_info()
     backends = [

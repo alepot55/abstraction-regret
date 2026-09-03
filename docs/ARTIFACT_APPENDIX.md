@@ -59,7 +59,7 @@ python scripts/regret_multiseed.py       # multi-seed robustness
 python scripts/run_anmlzoo.py            # six real automata, oracle-gated
 python scripts/second_gpu.py --profile rich   # cross-architecture re-run
 python scripts/gluon_probe.py            # 0 confirmed, 1 falsified, 2 inconclusive, 3 skipped
-python scripts/dfa_latch_control.py      # the open DFA control (docs/THREATS.md), not yet run
+python scripts/dfa_latch_control.py      # the DFA latch control (docs/THREATS.md); run on an A100
 ```
 
 ## Expected results
@@ -76,8 +76,12 @@ python scripts/dfa_latch_control.py      # the open DFA control (docs/THREATS.md
 
 ## Evaluating this artifact honestly
 
-[`THREATS.md`](THREATS.md) lists what an evaluator should attack, including two open confounds
-found by auditing the code after the paper was written: the Triton kernels do not exit the input
-loop early where CUDA and Warp do (immaterial on the NFA face, live on the DFA face), and the
-RTX 4070's L2 capacity was asserted rather than measured. Both are reproducible from this
-repository, and the second is one command away on any 4070.
+[`THREATS.md`](THREATS.md) lists what an evaluator should attack, with an explicit status on
+every entry. Two were found by auditing the code after the paper was written, and both have
+since been measured rather than argued. The Triton kernels do not exit the input loop early
+where CUDA and Warp do: immaterial on the NFA face, and on the DFA face worth most of the
+reported regret -- `dfa_latch_control.py` puts the controlled number at 1.3-1.5x instead of
+2.0-3.7x, and shows Warp and Triton level once the arms read the same bytes. The RTX 4070's L2
+capacity was asserted (6 MB, the Ampere figure) rather than measured (36 MB); the code now reads
+it from the device, and the cross-architecture cache-capacity argument that depended on the
+wrong number has been withdrawn. Both are reproducible from this repository.

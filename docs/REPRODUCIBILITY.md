@@ -65,6 +65,8 @@ refuses to overwrite a committed CSV measured on a different GPU
 
 Every driver takes `--out`, which is how you re-measure on a different GPU: the committed
 files carry the reference device in their name, so a run elsewhere has to go elsewhere.
+`bench_worklist_warp.py` writes two files and so also takes `--out-batch`; `second_gpu.py`
+writes a directory and takes `--outdir`.
 
 ```bash
 python scripts/sweep_dfa.py --out paper/data/cross_arch/dfa_regret_a100.csv
@@ -108,7 +110,11 @@ It measures the three backends at `accept_prob=0.02` (the paper's configuration,
 string latches after ~50 of its 1024 bytes and only the thread-SIMT arms exit early) and at
 `accept_prob=0.0` (where nothing latches, so all three walk the same input). If the tile/SPMD
 regret survives the second regime it is real; if it collapses, the DFA half was measuring the
-early exit. It has not been run.
+early exit. It has been run, on an A100-SXM4-40GB, and the result is committed as
+[`../paper/data/cross_arch/dfa_latch_a100.csv`](../paper/data/cross_arch/dfa_latch_a100.csv):
+the CUDA/Triton regret falls from 2.0-3.7x to **1.3-1.5x**, and Warp and Triton come out level.
+[`THREATS.md`](THREATS.md) section 1 has the table and what it costs the paper's DFA claim.
+Re-running it on an RTX 4070 is what would let the paper's own DFA numbers be restated.
 
 ## What re-running does and does not reproduce
 

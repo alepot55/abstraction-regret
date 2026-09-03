@@ -118,6 +118,18 @@ SCHEMAS: dict[str, list[str]] = {
         "achieved_occupancy_pct",
     ],
     "regret_a100.csv": ["num_states", "triton_regret", "warp_regret"],
+    "cross_arch/dfa_latch_a100.csv": [
+        "regime",
+        "accept_prob",
+        "backend",
+        "num_states",
+        "table_mb",
+        "throughput_gbps",
+        "mean_bytes_examined",
+        "accept_rate",
+        "gpu",
+        "l2_mb",
+    ],
     "dfa_knee_a100.csv": [
         "backend",
         "num_states",
@@ -135,6 +147,9 @@ NUMERIC = {
     "num_states",
     "n_strings",
     "slen",
+    "accept_prob",
+    "mean_bytes_examined",
+    "accept_rate",
     "median_ms",
     "ci95_lo_ms",
     "ci95_hi_ms",
@@ -207,8 +222,13 @@ def test_committed_csv_is_non_empty_and_parses(name: str) -> None:
 
 
 def test_every_committed_csv_is_pinned() -> None:
-    """A new CSV must be added to SCHEMAS, or it ships with nothing checking it."""
-    on_disk = {p.name for p in DATA.glob("*.csv")}
+    """A new CSV must be added to SCHEMAS, or it ships with nothing checking it.
+
+    The glob is recursive on purpose: the first cross-architecture result landed in
+    ``paper/data/cross_arch/`` and a non-recursive glob left the newest and most
+    consequential CSV as the one file this guarantee did not cover.
+    """
+    on_disk = {p.relative_to(DATA).as_posix() for p in DATA.rglob("*.csv")}
     assert on_disk == set(SCHEMAS), f"unpinned: {sorted(on_disk - set(SCHEMAS))}"
 
 
@@ -245,6 +265,7 @@ DRIVER_SCHEMAS = {
     "bench_worklist_warp.py": ("FIELDS", "worklist_warp_rtx4070.csv"),
     "bench_worklist_warp.py:batch": ("BATCH_FIELDS", "worklist_warp_batch_rtx4070.csv"),
     "run_anmlzoo.py": ("FIELDS", "real_automata_throughput_rtx4070.csv"),
+    "dfa_latch_control.py": ("FIELDS", "cross_arch/dfa_latch_a100.csv"),
 }
 
 

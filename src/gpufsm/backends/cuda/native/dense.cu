@@ -1,7 +1,7 @@
 // Dense NFA technique — one int8 slot per state.
 //
 // The faithful, correctness-first port of gpufsm.reference.simulate (latch-first-match),
-// kept as the abstraction-regret baseline: 4 bytes per state where one bit suffices.
+// kept as the abstraction-regret baseline: one byte per state where one bit suffices.
 // bitpacked.cu is the same algorithm on the packed layout.
 
 #include "include/api.hpp"

@@ -27,6 +27,7 @@ Two conventions hold across all of them:
 | `worklist_warp_batch_rtx4070.csv` | `scripts/bench_worklist_warp.py` | RTX 4070 | that the same speedup is batch-dependent, which is why the headline uses a saturating batch |
 | `worklist_shared_rtx4070.csv` | `scripts/bench_worklist_shared.py` | RTX 4070 | the negative result: moving the working set to shared memory is inert (0.99-1.10x) |
 | `real_automata_throughput_rtx4070.csv` | `scripts/run_anmlzoo.py` | RTX 4070 | correctness and throughput on the six pinned ANMLZoo families |
+| `cross_arch/dfa_latch_a100.csv` | `scripts/dfa_latch_control.py` | A100-SXM4-40GB | the latch control: the same three backends at `accept_prob=0.02` and at `0.0`, which is what separates the DFA regret from the trip-count asymmetry (see [`../../docs/THREATS.md`](../../docs/THREATS.md)) |
 
 ## Assembled by hand from a script's output
 
