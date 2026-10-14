@@ -154,6 +154,14 @@ Stated here rather than left for a reader to discover:
 - **The GPU test suite does not cover every registered technique.** `scripts/oracle_gate.py`
   does; `pytest -m gpu` does not, and the gap is listed in `docs/REPRODUCIBILITY.md`.
 
+## Origin and acknowledgments
+
+This work grew out of a 2025 Advanced Computer Architectures course project at Politecnico di
+Milano, whose research idea was proposed by Davide Conficconi and Filippo Del Nero (NECST
+Laboratory, DEIB), who supervised the project and guided the drafts that followed it. The project
+was carried out by Alessandro Potenza with Francesco Poloni, starting from automata code shared by
+Filippo Del Nero. The code in this repository was written for the HPEC study.
+
 ## Citing
 
 If you use this work, cite the HPEC 2026 paper; [`CITATION.cff`](CITATION.cff) carries both the
